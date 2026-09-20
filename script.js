@@ -1,4 +1,4 @@
-const shopUrl = "https://www.etsy.com/";
+const shopUrl = "https://www.etsy.com/shop/MucciProducts?ref=dashboard-header";
 
 document.querySelectorAll("[data-etsy-link]").forEach((link) => {
   link.setAttribute("href", shopUrl);

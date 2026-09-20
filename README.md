@@ -4,7 +4,7 @@ A responsive personal portfolio showcasing independent digital products and link
 
 ## Personalize
 
-Replace `shopUrl` in `script.js` with the full Etsy shop URL. Project copy and links live in `index.html`.
+The Etsy destination is configured in `script.js`. Project copy and links live in `index.html`.
 
 ## GitHub Pages
 

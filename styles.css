@@ -47,11 +47,10 @@ h1 em { color: var(--acid); font-family: Georgia, serif; font-weight: 400; lette
 .project { border: 1px solid var(--ink); }
 .project-featured { display: grid; grid-template-columns: 1.45fr 0.85fr; min-height: 560px; margin-bottom: 26px; }
 .project-visual { position: relative; min-height: 500px; display: flex; align-items: center; flex-direction: column; justify-content: center; overflow: hidden; border-right: 1px solid var(--ink); }
-.property-visual { background: #e2f8f7; }
-.property-visual::before, .property-visual::after { position: absolute; width: 360px; height: 360px; border: 1px solid rgba(31,84,216,.3); border-radius: 50%; content: ""; }
-.property-visual::after { width: 520px; height: 520px; }
-.property-visual img { position: relative; z-index: 1; width: clamp(150px, 22vw, 290px); filter: drop-shadow(0 24px 24px rgba(31,84,216,.16)); }
-.property-visual p { position: relative; z-index: 1; margin: 24px 0 0; font-size: 1rem; line-height: 1.5; text-align: center; }
+.moneyquest-visual { color: white; background: linear-gradient(145deg, #082a4a, #0a557b); }
+.moneyquest-visual::before, .moneyquest-visual::after { position: absolute; width: 360px; height: 360px; border: 1px solid rgba(255,255,255,.22); border-radius: 50%; content: ""; }
+.moneyquest-visual::after { width: 520px; height: 520px; }
+.moneyquest-visual p { position: relative; z-index: 1; margin: 34px 0 0; color: white; font-size: 1rem; line-height: 1.5; text-align: center; }
 .project-number { position: absolute; top: 24px; left: 26px; z-index: 2; font: 700 0.76rem/1 "Manrope", sans-serif; letter-spacing: .1em; }
 .project-copy { display: flex; align-items: flex-start; flex-direction: column; justify-content: center; padding: clamp(32px, 5vw, 72px); }
 .project-type { margin-bottom: 28px; font: 700 0.72rem/1 "Manrope", sans-serif; letter-spacing: .13em; text-transform: uppercase; }
@@ -63,10 +62,13 @@ h1 em { color: var(--acid); font-family: Georgia, serif; font-weight: 400; lette
 .project-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
 .project-compact { min-height: 590px; display: flex; flex-direction: column; }
 .compact-top { position: relative; min-height: 295px; display: grid; place-items: center; border-bottom: 1px solid var(--ink); }
-.project-saison .compact-top { color: white; background: linear-gradient(145deg, #082a4a, #0a557b); }
-.project-moneyquest .compact-top { background: var(--acid); }
+.project-pool .compact-top { color: white; background: linear-gradient(145deg, #0a557b, #16b8b4); }
+.project-future .compact-top { background: #dff8f7; }
 .mini-mark { font: 800 clamp(3.5rem, 8vw, 7rem)/1 "Manrope", sans-serif; letter-spacing: -.08em; }
 .coin { width: 140px; height: 140px; display: grid; place-items: center; border: 2px solid var(--ink); border-radius: 50%; box-shadow: 14px 14px 0 var(--ink); font: 700 4.6rem/1 Georgia, serif; }
+.coin-large { position: relative; z-index: 1; width: clamp(150px, 18vw, 210px); height: auto; aspect-ratio: 1; color: var(--ink); background: var(--acid); box-shadow: 16px 16px 0 rgba(255,255,255,.9); }
+.pool-mark, .future-mark { font: 800 clamp(3.3rem, 7vw, 6.4rem)/1 "Manrope", sans-serif; letter-spacing: -.08em; }
+.pool-mark { text-decoration: underline wavy rgba(255,255,255,.55); text-underline-offset: 14px; }
 .project-compact .project-copy { min-height: 290px; display: block; padding: 34px; }
 .project-compact .project-copy h3 { font-size: clamp(2.1rem, 4vw, 3.6rem); }
 .shop { display: grid; grid-template-columns: 1fr 1fr; min-height: 690px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); background: #dff8f7; }
