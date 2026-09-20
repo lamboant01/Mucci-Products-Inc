@@ -2,6 +2,10 @@
 
 A responsive personal portfolio showcasing independent digital products and linking to an Etsy shop.
 
+## Live site
+
+[Visit the Mucci Products website](https://lamboant01.github.io/Mucci-Products-Inc./)
+
 ## Personalize
 
 The Etsy destination is configured in `script.js`. Project copy and links live in `index.html`.
