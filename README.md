@@ -1,4 +1,4 @@
-# Anthony — Projects & Etsy
+# Mucci Products — Projects & Etsy
 
 A responsive personal portfolio showcasing independent digital products and linking to an Etsy shop.
 
