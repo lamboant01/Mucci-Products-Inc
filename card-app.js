@@ -3,6 +3,7 @@
   const app = document.querySelector("#card-app");
   const config = window.MUCCI_CONFIG || {};
   const core = window.MucciCards;
+  const canonicalSiteUrl = String(config.publicSiteUrl || "https://mucciproducts.com").replace(/\/$/, "");
 
   function siteBase() {
     if (location.hostname.endsWith("github.io")) return `/${location.pathname.split("/").filter(Boolean)[0]}`;
@@ -49,7 +50,7 @@
     document.title = `${profile.name || "Digital Card"} | Mucci Products`;
     app.innerHTML = `
       <div class="card-shell showcase-shell">
-        <header class="card-brand"><a href="${siteBase() || "/"}" aria-label="Mucci Products home"><img src="${siteBase()}/assets/mucci-products-logo.png" alt="Mucci Products" /></a><a href="${siteBase()}/my-cards/">My Cards</a></header>
+        <header class="card-brand"><a href="${canonicalSiteUrl}" aria-label="Mucci Products home"><img src="${siteBase()}/assets/mucci-products-logo.png" alt="Mucci Products" /></a><a href="${canonicalSiteUrl}/my-cards/">My Cards</a></header>
         ${offline ? '<p class="offline-banner" role="status">Offline copy from your last visit</p>' : ""}
         <section class="showcase-grid">
           <div class="showcase-intro"><p class="eyebrow">Simple · Modern · Connected</p><h2>Keep this digital card</h2><p>Tap once and keep ${escapeHtml((profile.name || "this contact").split(" ")[0])}’s details close at hand.</p><ul><li>Instantly share contact details</li><li>A more sustainable way to network</li><li>Works on any modern device</li></ul></div>
@@ -108,7 +109,7 @@
   }
 
   function renderError(message) {
-    app.innerHTML = `<section class="error-state"><a class="error-logo" href="${siteBase() || "/"}"><img src="${siteBase()}/assets/mucci-products-logo.png" alt="Mucci Products" /></a><p class="eyebrow">Mucci Digital Cards</p><h1>This digital card is currently unavailable.</h1><p>${escapeHtml(message)}</p><a class="button button-primary" href="${siteBase() || "/"}">Return to Mucci Products</a></section>`;
+    app.innerHTML = `<section class="error-state"><a class="error-logo" href="${canonicalSiteUrl}"><img src="${siteBase()}/assets/mucci-products-logo.png" alt="Mucci Products" /></a><p class="eyebrow">Mucci Digital Cards</p><h1>This digital card is currently unavailable.</h1><p>${escapeHtml(message)}</p><a class="button button-primary" href="${canonicalSiteUrl}">Return to Mucci Products</a></section>`;
   }
 
   async function init() {

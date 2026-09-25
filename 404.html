@@ -15,7 +15,7 @@
         var parts = location.pathname.split("/").filter(Boolean);
         var cardIndex = parts.indexOf("card");
         if (cardIndex < 0 || !parts[cardIndex + 1]) {
-          document.getElementById("card-app").innerHTML = '<section class="error-state"><h1>Page not found</h1><p>The page you requested does not exist.</p><a href="' + (location.hostname.endsWith("github.io") ? "/" + parts[0] + "/" : "/") + '">Return home</a></section>';
+          document.getElementById("card-app").innerHTML = '<section class="error-state"><h1>Page not found</h1><p>The page you requested does not exist.</p><a href="https://mucciproducts.com">Return home</a></section>';
           return;
         }
         var base = location.hostname.endsWith("github.io") ? "/" + parts[0] : "";
