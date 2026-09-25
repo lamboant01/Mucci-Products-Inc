@@ -81,6 +81,11 @@
     if (profile.email) lines.push(`EMAIL;TYPE=INTERNET:${escapeVCard(profile.email)}`);
     if (profile.website) lines.push(`URL:${escapeVCard(profile.website)}`);
     if (profile.address) lines.push(`ADR;TYPE=WORK:;;${escapeVCard(profile.address)};;;;`);
+    if (profile.linkedin) lines.push(`X-SOCIALPROFILE;TYPE=linkedin:${escapeVCard(profile.linkedin)}`);
+    if (profile.instagram) lines.push(`X-SOCIALPROFILE;TYPE=instagram:${escapeVCard(profile.instagram)}`);
+    if (profile.bio) lines.push(`NOTE:${escapeVCard(profile.bio)}`);
+    if (profile.profile_image_url) lines.push(`PHOTO;VALUE=URI:${escapeVCard(profile.profile_image_url)}`);
+    if (profile.logo_url) lines.push(`LOGO;VALUE=URI:${escapeVCard(profile.logo_url)}`);
     lines.push("END:VCARD");
     return lines.map(foldLine).join("\r\n") + "\r\n";
   }

@@ -40,6 +40,22 @@
     return `<a class="quick-action" href="${escapeHtml(href)}" ${extra || ""}><span aria-hidden="true">${icon}</span>${escapeHtml(label)}</a>`;
   }
 
+  function safeFilename(value) {
+    return String(value || "mucci-contact").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "mucci-contact";
+  }
+
+  function downloadVCard(profile) {
+    const blob = new Blob([core.generateVCard(profile)], { type: "text/vcard;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${safeFilename(profile.name)}.vcf`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   function renderProfile(profile, token, offline) {
     const name = escapeHtml(profile.name || "Digital card");
     const image = safeUrl(profile.profile_image_url || profile.logo_url);
@@ -77,17 +93,18 @@
           ${(linkedin || instagram) ? `<div class="social-links">${actionLink(linkedin, "LinkedIn", "in", 'target="_blank" rel="noreferrer"')}${actionLink(instagram, "Instagram", "◎", 'target="_blank" rel="noreferrer"')}</div>` : ""}
         </article>
         <aside class="showcase-actions">
-          <button class="button button-primary" disabled title="Contact downloads will be enabled in a later release">Save to Contacts <small>Coming soon</small></button>
-          <button class="button button-primary" disabled title="Wallet pass generation requires a secure signing service">Add to Apple Wallet <small>Coming soon</small></button>
-          <button class="button button-primary" disabled title="Wallet pass generation requires a secure signing service">Add to Google Wallet <small>Coming soon</small></button>
+          <button class="button button-primary" id="save-contact" type="button">Save to Contacts</button>
+          <a class="button button-primary" href="/api/wallet/apple?token=${encodeURIComponent(token)}">Add to Apple Wallet</a>
+          <a class="button button-primary" href="/api/wallet/google?token=${encodeURIComponent(token)}">Add to Google Wallet</a>
           <button class="button button-secondary" id="save-image">Save Card Image</button>
           <div class="public-qr"><div id="public-card-qr" aria-label="QR code for this digital card"></div><p>Scan this QR code to open this card on your phone.</p></div>
           <p class="showcase-signoff">Mucci Products Inc.<br><small>People · Connections · Opportunities</small></p>
         </aside>
         </section>
-        <section class="card-benefits"><div><span>▣</span><h3>Save Instantly</h3><p>Contact saving will be available in a future release.</p></div><div><span>▰</span><h3>Works Everywhere</h3><p>Open the card in a modern browser with no app required.</p></div><div><span>♧</span><h3>A Greener Choice</h3><p>Share digitally and reduce paper waste.</p></div></section>
+        <section class="card-benefits"><div><span>▣</span><h3>Save Instantly</h3><p>Download the complete contact directly to your device.</p></div><div><span>▰</span><h3>Works Everywhere</h3><p>Keep the card in Apple Wallet, Google Wallet, or any modern browser.</p></div><div><span>♧</span><h3>A Greener Choice</h3><p>Share digitally and reduce paper waste.</p></div></section>
         <footer class="card-footer">Shared with Mucci Digital Cards</footer>
       </div>`;
+    document.querySelector("#save-contact").addEventListener("click", () => downloadVCard(profile));
     document.querySelector("#save-image").addEventListener("click", () => saveCardImage(profile));
     if (window.qrcode) {
       const qr = window.qrcode(0, "M"); qr.addData(location.href); qr.make();
