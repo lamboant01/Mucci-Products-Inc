@@ -12,6 +12,7 @@ button, input, textarea { font:inherit; }
 .card-brand { display:flex; align-items:center; justify-content:space-between; padding:4px 2px 22px; font-size:.88rem; font-weight:700; }
 .card-brand img,.error-logo img { width:150px; clip-path:inset(20% 0 20% 0); margin:-15px 0; }
 .card-brand a { text-decoration:none; }
+.card-account-links { display:flex; gap:20px; }
 .digital-card { overflow:hidden; border:1px solid var(--ink); background:rgba(255,255,255,.9); box-shadow:10px 10px 0 var(--ink); }
 .identity { padding:clamp(30px,7vw,64px); text-align:center; border-bottom:1px solid var(--line); }
 .profile-image,.profile-placeholder { width:120px; height:120px; margin:0 auto 18px; border:2px solid var(--ink); border-radius:50%; object-fit:cover; box-shadow:7px 7px 0 var(--acid); }
@@ -77,6 +78,24 @@ button, input, textarea { font:inherit; }
 .empty-state { padding:60px 24px; border:1px dashed var(--ink); text-align:center; }
 .avatar-small { width:64px; height:64px; border:1px solid var(--ink); border-radius:50%; object-fit:cover; }
 .dashboard-notice { padding:20px; border:1px solid var(--blue); background:#dff8f7; line-height:1.55; }
+.dashboard-stack { display:grid; gap:42px; }
+.dashboard-section { display:grid; gap:20px; }
+.dashboard-section-heading { display:flex; align-items:end; justify-content:space-between; gap:20px; }
+.dashboard-section-heading h2 { margin:0; font:700 clamp(1.8rem,4vw,3rem)/1 "Manrope",sans-serif; letter-spacing:-.04em; }
+.owner-form { width:min(100%,720px); gap:18px; }
+.owner-form label { display:grid; gap:7px; color:var(--muted); font-size:.78rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+.owner-form input:not([type="checkbox"]),.owner-form textarea { width:100%; min-height:46px; padding:11px 13px; border:1px solid var(--line); color:var(--ink); background:white; }
+.owner-form textarea { min-height:110px; resize:vertical; }
+.owner-form .checkbox-label { display:flex; align-items:center; gap:9px; color:var(--ink); text-transform:none; }
+.form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.form-grid .full-width { grid-column:1/-1; }
+.setup-card { max-width:760px; padding:clamp(26px,5vw,52px); }
+.setup-card h2 { margin:0 0 10px; font:700 clamp(2rem,5vw,3.7rem)/1 "Manrope",sans-serif; letter-spacing:-.05em; }
+.setup-card > p { margin-bottom:28px; color:var(--muted); line-height:1.6; }
+.dashboard-user { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:14px 18px; border:1px solid var(--line); background:white; }
+.dashboard-user p { margin:0; overflow-wrap:anywhere; }
+.card-url { overflow-wrap:anywhere; }
+.upload-row { display:grid; grid-template-columns:1fr auto; align-items:end; gap:10px; }
 @media(max-width:960px){.showcase-grid{grid-template-columns:1fr 1fr}.showcase-intro{grid-column:1/-1}.showcase-intro ul{grid-template-columns:repeat(3,1fr);gap:16px}.card-benefits{grid-template-columns:repeat(3,1fr)}.card-benefits::before{grid-column:1/-1}}
-@media(max-width:680px){.card-shell{padding:0}.card-brand{padding:14px 18px}.showcase-grid{display:flex;flex-direction:column;padding:32px 18px}.showcase-intro{width:100%}.showcase-intro ul{display:none}.compact-card{width:100%;box-shadow:0 14px 38px rgba(8,42,74,.12)}.showcase-actions{width:100%}.digital-card{border-right:1px solid var(--line);border-left:1px solid var(--line)}.primary-actions{grid-template-columns:1fr}.quick-actions{flex-wrap:wrap}.card-benefits{grid-template-columns:1fr;padding:40px 18px}.page-header{align-items:flex-start;flex-direction:column;margin-bottom:38px}.saved-card-actions{flex-direction:column}}
+@media(max-width:680px){.card-shell{padding:0}.card-brand{padding:14px 18px}.card-account-links{gap:12px;font-size:.78rem}.showcase-grid{display:flex;flex-direction:column;padding:32px 18px}.showcase-intro{width:100%}.showcase-intro ul{display:none}.compact-card{width:100%;box-shadow:0 14px 38px rgba(8,42,74,.12)}.showcase-actions{width:100%}.digital-card{border-right:1px solid var(--line);border-left:1px solid var(--line)}.primary-actions{grid-template-columns:1fr}.quick-actions{flex-wrap:wrap}.card-benefits{grid-template-columns:1fr;padding:40px 18px}.page-header{align-items:flex-start;flex-direction:column;margin-bottom:38px}.saved-card-actions,.dashboard-user{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}.form-grid .full-width{grid-column:auto}.upload-row{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.spinner{animation:none}}

@@ -15,13 +15,24 @@ Contact downloads and Apple/Google Wallet buttons are intentionally non-function
 
 ### Setup
 
-1. Create a Supabase project and run `supabase/migrations/001_mucci_digital_cards.sql` in its SQL editor.
-2. In Supabase Authentication, enable Email and add the deployed `/card-dashboard/` URL to Redirect URLs.
+1. Create a Supabase project and run `supabase/migrations/001_mucci_digital_cards.sql`, followed by `supabase/migrations/002_owner_profile_setup.sql`, in its SQL editor.
+2. In Supabase Authentication, enable Email. Set the Site URL to `https://mucciproducts.com` and add `https://mucciproducts.com/card-dashboard/` to Redirect URLs.
 3. Set `supabaseUrl`, `supabaseAnonKey`, and the final `publicSiteUrl` in `config.js`. The anon key is public by design; never use the service-role key in this repository.
-4. Create an Auth user. In the SQL editor, insert a `profiles` row using that user's UUID, then insert one or more `physical_cards` rows referencing the profile. Omit `public_token` so PostgreSQL generates a random 48-character token.
-5. Program the displayed `https://mucciproducts.ca/card/{token}` URL onto the NFC tag with NFC Tools or NXP TagWriter.
+4. In **Authentication → Users**, invite or create the owner's email. Open `/card-dashboard/`, request a sign-in link, and complete the first-card setup form. Public self-registration is disabled; the authenticated RPC creates the invited owner's profile and one physical card with a random 48-character token.
+5. Program the displayed `https://mucciproducts.com/card/{token}` URL onto the NFC tag with NFC Tools or NXP TagWriter.
 
-The `card-assets` public Storage bucket accepts PNG, JPEG, WebP, and SVG files up to 5 MB. Owner uploads must use an object path beginning with their Auth UUID. The current dashboard accepts image URLs but does not yet include an upload control.
+### Branded sign-in email
+
+For a hosted Supabase project, committed templates are not applied automatically. In **Supabase Dashboard → Authentication → Email Templates**:
+
+1. Under **Magic Link**, set the subject to `Your Mucci Digital Cards sign-in link` and copy `supabase/templates/magic-link.html` into the message body.
+2. Under **Invite user**, set the subject to `Your Mucci Digital Cards invitation` and copy `supabase/templates/invite.html` into the message body.
+3. Optionally brand **Confirm signup** with `supabase/templates/confirmation.html` if you later enable public signup.
+4. Save the templates and test with one invited owner and one existing owner account.
+
+The template uses Supabase's `{{ .ConfirmationURL }}` and `{{ .Email }}` variables. For production delivery beyond project team addresses, configure custom SMTP in Supabase and disable provider click tracking so authentication links are not rewritten.
+
+The `card-assets` public Storage bucket accepts PNG, JPEG, WebP, and SVG files up to 5 MB. Owner uploads use an object path beginning with their Auth UUID. The dashboard supports profile-photo and company-logo uploads after the first profile is created.
 
 ### Local testing
 
@@ -37,9 +48,9 @@ Then open `http://localhost:8080/card.html?token=sample-preview-2026&preview=1` 
 node --test tests/card-core.test.js
 ```
 
-### GitHub Pages limitation
+### Hosting and clean routes
 
-GitHub Pages has no rewrite rules. Clean `/card/{token}` URLs are handled by the custom `404.html`; the card renders at that URL, but the HTTP status remains 404. For correct 200 responses and stronger caching/analytics, use a host with rewrites (Cloudflare Pages, Netlify, or Vercel) or put a worker/proxy in front of GitHub Pages.
+The production site is hosted on Vercel. Configure a rewrite so `/card/{token}` serves `card.html` while preserving the public URL. The included `404.html` remains a fallback for static hosting.
 
 ### Security model
 
@@ -47,12 +58,12 @@ Anonymous roles cannot select the `profiles`, `physical_cards`, or `saved_profil
 
 ## Live site
 
-[Visit the Mucci Products website](https://lamboant01.github.io/Mucci-Products-Inc./)
+[Visit the Mucci Products website](https://mucciproducts.com/)
 
 ## Personalize
 
 The Etsy destination is configured in `script.js`. Project copy and links live in `index.html`.
 
-## GitHub Pages
+## Deployment
 
-The included workflow publishes the site whenever `main` is updated. In the repository settings, set **Pages → Source** to **GitHub Actions** if it is not selected automatically.
+Vercel is the production host. The legacy GitHub Pages workflow remains in the repository but is not the production domain target.
