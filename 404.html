@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <meta name="theme-color" content="#082a4a" />
+    <title>Mucci Products</title>
+    <style>body{margin:0;background:#f7fbfd;color:#082a4a;font:16px system-ui,sans-serif}.loading-state{min-height:100vh;display:grid;place-content:center;text-align:center}</style>
+  </head>
+  <body class="cards-page" data-card-view>
+    <main id="card-app" aria-live="polite"><div class="loading-state"><p>Opening digital card…</p></div></main>
+    <script>
+      (function () {
+        var parts = location.pathname.split("/").filter(Boolean);
+        var cardIndex = parts.indexOf("card");
+        if (cardIndex < 0 || !parts[cardIndex + 1]) {
+          document.getElementById("card-app").innerHTML = '<section class="error-state"><h1>Page not found</h1><p>The page you requested does not exist.</p><a href="' + (location.hostname.endsWith("github.io") ? "/" + parts[0] + "/" : "/") + '">Return home</a></section>';
+          return;
+        }
+        var base = location.hostname.endsWith("github.io") ? "/" + parts[0] : "";
+        var link = document.createElement("link"); link.rel = "stylesheet"; link.href = base + "/cards.css"; document.head.appendChild(link);
+        [base + "/config.js", base + "/card-core.js", "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js", base + "/card-app.js"].reduce(function (promise, src) {
+          return promise.then(function () { return new Promise(function (resolve, reject) { var script = document.createElement("script"); script.src = src; script.onload = resolve; script.onerror = reject; document.body.appendChild(script); }); });
+        }, Promise.resolve());
+      })();
+    </script>
+  </body>
+</html>

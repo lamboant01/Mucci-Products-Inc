@@ -1,0 +1,82 @@
+:root { --ink:#082a4a; --paper:#f7fbfd; --acid:#16b8b4; --blue:#0a557b; --muted:#5f7385; --line:rgba(8,42,74,.18); font-family:"DM Sans",sans-serif; color:var(--ink); background:var(--paper); }
+* { box-sizing:border-box; }
+body { margin:0; min-width:320px; }
+a { color:inherit; }
+button, input, textarea { font:inherit; }
+.cards-page { min-height:100svh; background:radial-gradient(circle at 85% 5%,rgba(22,184,180,.17),transparent 28%),var(--paper); }
+.loading-state,.error-state { min-height:100svh; display:grid; place-content:center; justify-items:center; padding:32px; text-align:center; }
+.spinner { width:38px; height:38px; border:3px solid var(--line); border-top-color:var(--acid); border-radius:50%; animation:spin .8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.card-shell { width:min(100%,760px); min-height:100svh; margin:auto; padding:18px; }
+.showcase-shell { width:min(100%,1240px); }
+.card-brand { display:flex; align-items:center; justify-content:space-between; padding:4px 2px 22px; font-size:.88rem; font-weight:700; }
+.card-brand img,.error-logo img { width:150px; clip-path:inset(20% 0 20% 0); margin:-15px 0; }
+.card-brand a { text-decoration:none; }
+.digital-card { overflow:hidden; border:1px solid var(--ink); background:rgba(255,255,255,.9); box-shadow:10px 10px 0 var(--ink); }
+.identity { padding:clamp(30px,7vw,64px); text-align:center; border-bottom:1px solid var(--line); }
+.profile-image,.profile-placeholder { width:120px; height:120px; margin:0 auto 18px; border:2px solid var(--ink); border-radius:50%; object-fit:cover; box-shadow:7px 7px 0 var(--acid); }
+.profile-placeholder { display:grid; place-items:center; background:#dff8f7; font:800 3.5rem/1 "Manrope",sans-serif; }
+.company-logo { max-width:140px; max-height:52px; margin:20px auto; object-fit:contain; }
+.eyebrow { margin:0 0 14px; font:700 .72rem/1 "Manrope",sans-serif; letter-spacing:.14em; text-transform:uppercase; }
+.identity h1,.error-state h1 { margin:0; font:800 clamp(2.6rem,9vw,5rem)/.95 "Manrope",sans-serif; letter-spacing:-.06em; }
+.title { margin:20px 0 2px; font-size:1.14rem; }
+.company { margin:0; color:var(--blue); font-weight:700; }
+.bio { max-width:520px; margin:24px auto 0; color:var(--muted); line-height:1.6; }
+.primary-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:20px; }
+.button { min-height:50px; display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:13px 16px; border:1px solid var(--ink); text-decoration:none; font-weight:700; cursor:pointer; }
+.button-primary { color:white; background:var(--ink); }
+.button-secondary { color:var(--ink); background:white; }
+.button:disabled { cursor:not-allowed; opacity:.48; }
+.button small { font-weight:500; }
+.quick-actions,.social-links { display:flex; justify-content:center; gap:10px; padding:0 20px 20px; }
+.quick-action { min-width:88px; display:flex; align-items:center; flex-direction:column; gap:7px; padding:13px; border:1px solid var(--line); text-decoration:none; font-size:.78rem; font-weight:700; }
+.quick-action span { font-size:1.2rem; }
+.details { margin:0; padding:0 20px; border-top:1px solid var(--line); }
+.details div { display:grid; grid-template-columns:90px 1fr; gap:14px; padding:17px 0; border-bottom:1px solid var(--line); }
+.details dt { color:var(--muted); font-size:.78rem; font-weight:700; text-transform:uppercase; }
+.details dd { margin:0; overflow-wrap:anywhere; }
+.social-links { padding-top:20px; }
+.card-footer { padding:28px; text-align:center; color:var(--muted); font-size:.78rem; }
+.offline-banner { margin:0 0 12px; padding:10px; color:white; background:var(--blue); text-align:center; font-size:.82rem; }
+.showcase-grid { display:grid; grid-template-columns:.95fr 1.05fr .82fr; align-items:center; gap:34px; padding:48px 0 64px; }
+.showcase-intro h2 { margin:0 0 12px; font:800 clamp(2.4rem,4.2vw,4.5rem)/.95 "Manrope",sans-serif; letter-spacing:-.06em; }
+.showcase-intro > p:not(.eyebrow) { color:var(--muted); font-size:1.15rem; line-height:1.55; }
+.showcase-intro ul { display:grid; gap:34px; margin:48px 0 0; padding:0; list-style:none; }
+.showcase-intro li { position:relative; padding-left:54px; line-height:1.45; }
+.showcase-intro li::before { position:absolute; left:0; top:-10px; width:38px; height:38px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; content:"✓"; }
+.compact-card { box-shadow:0 24px 60px rgba(8,42,74,.13); border-color:var(--line); border-radius:20px; }
+.compact-card .identity { padding:40px 28px 28px; }
+.compact-card .identity h1 { font-size:clamp(2.2rem,4vw,3.8rem); }
+.showcase-actions { display:grid; gap:12px; }
+.showcase-actions .button { width:100%; min-height:58px; }
+.public-qr { display:grid; grid-template-columns:auto 1fr; align-items:center; gap:18px; margin-top:22px; padding:18px; border:1px solid var(--line); border-radius:14px; background:white; }
+.public-qr svg { width:120px; height:120px; display:block; }
+.public-qr p { margin:0; color:var(--muted); font-size:.9rem; line-height:1.45; }
+.showcase-signoff { margin:24px 0 0; font:700 .7rem/1.8 "Manrope",sans-serif; letter-spacing:.13em; text-transform:uppercase; }
+.card-benefits { display:grid; grid-template-columns:1.1fr repeat(3,1fr); gap:18px; padding:48px 0; border-top:1px solid var(--line); }
+.card-benefits::before { content:"More than a business card"; align-self:center; font:800 clamp(2rem,3vw,3.2rem)/1 "Manrope",sans-serif; letter-spacing:-.05em; }
+.card-benefits > div { padding:26px; border:1px solid var(--line); background:rgba(255,255,255,.72); }
+.card-benefits span { font-size:1.5rem; }
+.card-benefits h3 { margin:30px 0 10px; font:700 1.15rem/1.2 "Manrope",sans-serif; }
+.card-benefits p { margin:0; color:var(--muted); line-height:1.5; }
+.error-state { max-width:680px; margin:auto; }
+.error-state h1 { margin:8px 0 20px; }
+.error-state > p:not(.eyebrow) { margin-bottom:28px; color:var(--muted); }
+.error-logo { margin-bottom:50px; }
+.saved-shell,.dashboard-shell { width:min(100% - 32px,1040px); margin:auto; padding:24px 0 80px; }
+.page-header { display:flex; align-items:center; justify-content:space-between; gap:24px; margin-bottom:60px; }
+.page-header img { width:170px; clip-path:inset(20% 0); margin:-16px 0; }
+.page-title h1 { margin:0 0 12px; font:800 clamp(3rem,8vw,6rem)/.9 "Manrope",sans-serif; letter-spacing:-.07em; }
+.page-title p { color:var(--muted); }
+.saved-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px; }
+.saved-card { display:flex; flex-direction:column; padding:24px; border:1px solid var(--ink); background:white; box-shadow:6px 6px 0 var(--acid); }
+.saved-card h2 { margin:16px 0 5px; font:700 1.6rem/1.1 "Manrope",sans-serif; }
+.saved-card p { margin:3px 0; color:var(--muted); }
+.saved-card small { margin:20px 0; }
+.saved-card-actions { display:flex; gap:8px; margin-top:auto; }
+.empty-state { padding:60px 24px; border:1px dashed var(--ink); text-align:center; }
+.avatar-small { width:64px; height:64px; border:1px solid var(--ink); border-radius:50%; object-fit:cover; }
+.dashboard-notice { padding:20px; border:1px solid var(--blue); background:#dff8f7; line-height:1.55; }
+@media(max-width:960px){.showcase-grid{grid-template-columns:1fr 1fr}.showcase-intro{grid-column:1/-1}.showcase-intro ul{grid-template-columns:repeat(3,1fr);gap:16px}.card-benefits{grid-template-columns:repeat(3,1fr)}.card-benefits::before{grid-column:1/-1}}
+@media(max-width:680px){.card-shell{padding:0}.card-brand{padding:14px 18px}.showcase-grid{display:flex;flex-direction:column;padding:32px 18px}.showcase-intro{width:100%}.showcase-intro ul{display:none}.compact-card{width:100%;box-shadow:0 14px 38px rgba(8,42,74,.12)}.showcase-actions{width:100%}.digital-card{border-right:1px solid var(--line);border-left:1px solid var(--line)}.primary-actions{grid-template-columns:1fr}.quick-actions{flex-wrap:wrap}.card-benefits{grid-template-columns:1fr;padding:40px 18px}.page-header{align-items:flex-start;flex-direction:column;margin-bottom:38px}.saved-card-actions{flex-direction:column}}
+@media(prefers-reduced-motion:reduce){.spinner{animation:none}}
