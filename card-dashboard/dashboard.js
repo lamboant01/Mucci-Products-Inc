@@ -29,7 +29,7 @@
   }
 
   function renderLogin(initialMessage) {
-    root.innerHTML = `<form id="login-form" class="saved-card owner-form setup-card"><p class="eyebrow">Restricted administration</p><h2>Admin sign in</h2><p>Use the Mucci Products administrator account to manage the example digital-card profile.</p><div class="locked-email"><span>Email address</span><strong>${allowedAdminEmail}</strong></div><label>Password<input required type="password" name="password" autocomplete="current-password"></label><button class="button button-primary" type="submit">Sign in to admin panel</button><p id="login-message" role="status">${escapeHtml(initialMessage || "")}</p></form>`;
+    root.innerHTML = `<form id="login-form" class="saved-card owner-form setup-card" autocomplete="off"><p class="eyebrow">Restricted administration</p><h2>Admin sign in</h2><p>Enter the administrator email and password to manage the example digital-card profiles.</p><label>Email address<input required type="email" name="email" inputmode="email" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Email address"></label><label>Password<input required type="password" name="password" autocomplete="current-password"></label><button class="button button-primary" type="submit">Sign in to admin panel</button><p id="login-message" role="status">${escapeHtml(initialMessage || "")}</p></form>`;
     document.querySelector("#login-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = event.currentTarget;
@@ -38,7 +38,13 @@
       button.disabled = true;
       message.textContent = "Signing in…";
       const values = Object.fromEntries(new FormData(form));
-      const { data, error } = await client.auth.signInWithPassword({ email: allowedAdminEmail, password: values.password });
+      const submittedEmail = String(values.email || "").trim().toLowerCase();
+      if (submittedEmail !== allowedAdminEmail) {
+        message.textContent = "The email or password is incorrect.";
+        button.disabled = false;
+        return;
+      }
+      const { data, error } = await client.auth.signInWithPassword({ email: submittedEmail, password: values.password });
       if (!error && String(data.user?.email || "").toLowerCase() !== allowedAdminEmail) {
         await client.auth.signOut();
         message.textContent = "This account is not authorized to access the admin panel.";

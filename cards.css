@@ -100,8 +100,6 @@ button, input, textarea { font:inherit; }
 .new-card-panel > summary { width:max-content; margin:18px; list-style:none; }
 .new-card-panel > summary::-webkit-details-marker { display:none; }
 .new-card-panel .setup-card { width:100%; max-width:none; border:0; border-top:1px solid var(--line); box-shadow:none; }
-.locked-email { display:grid; gap:7px; padding:12px 14px; border:1px solid var(--line); background:#f7fbfd; }
-.locked-email span { color:var(--muted); font-size:.7rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
 @media(max-width:960px){.showcase-grid{grid-template-columns:1fr 1fr}.showcase-intro{grid-column:1/-1}.showcase-intro ul{grid-template-columns:repeat(3,1fr);gap:16px}.card-benefits{grid-template-columns:repeat(3,1fr)}.card-benefits::before{grid-column:1/-1}}
 @media(max-width:680px){.card-shell{padding:0}.card-brand{padding:14px 18px}.card-account-links{gap:12px;font-size:.78rem}.showcase-grid{display:flex;flex-direction:column;padding:32px 18px}.showcase-intro{width:100%}.showcase-intro ul{display:none}.compact-card{width:100%;box-shadow:0 14px 38px rgba(8,42,74,.12)}.showcase-actions{width:100%}.digital-card{border-right:1px solid var(--line);border-left:1px solid var(--line)}.primary-actions{grid-template-columns:1fr}.quick-actions{flex-wrap:wrap}.card-benefits{grid-template-columns:1fr;padding:40px 18px}.page-header{align-items:flex-start;flex-direction:column;margin-bottom:38px}.saved-card-actions,.dashboard-user{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}.form-grid .full-width{grid-column:auto}.upload-row{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.spinner{animation:none}}
