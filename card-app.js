@@ -50,7 +50,7 @@
     document.title = `${profile.name || "Digital Card"} | Mucci Products`;
     app.innerHTML = `
       <div class="card-shell showcase-shell">
-        <header class="card-brand"><a href="${canonicalSiteUrl}" aria-label="Mucci Products home"><img src="${siteBase()}/assets/mucci-products-logo.png" alt="Mucci Products" /></a><nav class="card-account-links" aria-label="Digital card account"><a href="${canonicalSiteUrl}/my-cards/">My Cards</a><a href="${canonicalSiteUrl}/card-dashboard/">Owner Sign In</a></nav></header>
+        <header class="card-brand"><a href="${canonicalSiteUrl}" aria-label="Mucci Products home"><img src="${siteBase()}/assets/mucci-products-logo.png" alt="Mucci Products" /></a><nav class="card-account-links" aria-label="Digital card account"><a href="${canonicalSiteUrl}/my-cards/">My Cards</a><a href="${canonicalSiteUrl}/card-dashboard/">Admin Sign In</a></nav></header>
         ${offline ? '<p class="offline-banner" role="status">Offline copy from your last visit</p>' : ""}
         <section class="showcase-grid">
           <div class="showcase-intro"><p class="eyebrow">Simple · Modern · Connected</p><h2>Keep this digital card</h2><p>Tap once and keep ${escapeHtml((profile.name || "this contact").split(" ")[0])}’s details close at hand.</p><ul><li>Instantly share contact details</li><li>A more sustainable way to network</li><li>Works on any modern device</li></ul></div>

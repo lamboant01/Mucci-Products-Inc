@@ -4,6 +4,7 @@
   const config = window.MUCCI_CONFIG || {};
   const core = window.MucciCards;
   const canonicalSiteUrl = String(config.publicSiteUrl || "https://mucciproducts.com").replace(/\/$/, "");
+  const allowedAdminEmail = "anthony@mucciproducts.com";
   const fields = ["name", "company", "title", "phone", "email", "website", "linkedin", "instagram", "address", "bio", "logo_url", "profile_image_url"];
   let currentUser = null;
   const escapeHtml = (value) => String(value || "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
@@ -19,23 +20,38 @@
   async function init() {
     const { data: { session } } = await client.auth.getSession();
     if (!session) return renderLogin();
+    if (String(session.user.email || "").toLowerCase() !== allowedAdminEmail) {
+      await client.auth.signOut();
+      return renderLogin("This account is not authorized to access the admin panel.");
+    }
     currentUser = session.user;
     await loadDashboard();
   }
 
-  function renderLogin() {
-    root.innerHTML = `<form id="login-form" class="saved-card owner-form setup-card"><p class="eyebrow">Passwordless access</p><h2>Owner sign in</h2><p>Enter the invited email connected to your card. We’ll send a secure one-time link with no password required.</p><label>Email address<input required type="email" name="email" autocomplete="email" placeholder="you@example.com"></label><button class="button button-primary" type="submit">Email my secure sign-in link</button><p id="login-message" role="status"></p></form>`;
+  function renderLogin(initialMessage) {
+    root.innerHTML = `<form id="login-form" class="saved-card owner-form setup-card"><p class="eyebrow">Restricted administration</p><h2>Admin sign in</h2><p>Use the Mucci Products administrator account to manage the example digital-card profile.</p><div class="locked-email"><span>Email address</span><strong>${allowedAdminEmail}</strong></div><label>Password<input required type="password" name="password" autocomplete="current-password"></label><button class="button button-primary" type="submit">Sign in to admin panel</button><p id="login-message" role="status">${escapeHtml(initialMessage || "")}</p></form>`;
     document.querySelector("#login-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = event.currentTarget;
       const message = form.querySelector("#login-message");
       const button = form.querySelector("button");
       button.disabled = true;
-      message.textContent = "Sending your secure link…";
-      const email = new FormData(form).get("email");
-      const { error } = await client.auth.signInWithOtp({ email, options: { emailRedirectTo: `${canonicalSiteUrl}/card-dashboard/`, shouldCreateUser: false } });
-      message.textContent = error ? error.message : "Check your inbox. Your secure sign-in link is on its way.";
-      button.disabled = false;
+      message.textContent = "Signing in…";
+      const values = Object.fromEntries(new FormData(form));
+      const { data, error } = await client.auth.signInWithPassword({ email: allowedAdminEmail, password: values.password });
+      if (!error && String(data.user?.email || "").toLowerCase() !== allowedAdminEmail) {
+        await client.auth.signOut();
+        message.textContent = "This account is not authorized to access the admin panel.";
+        button.disabled = false;
+        return;
+      }
+      if (error) {
+        message.textContent = "The email or password is incorrect.";
+        button.disabled = false;
+        return;
+      }
+      currentUser = data.user;
+      await loadDashboard();
     });
   }
 
@@ -58,13 +74,17 @@
     return `<label>${label(name)}<input type="${type || "text"}" name="${name}" ${required ? "required" : ""}></label>`;
   }
 
-  function renderFirstProfileSetup() {
-    root.innerHTML = `<div class="dashboard-stack">${userBar()}<form id="setup-form" class="saved-card owner-form setup-card"><p class="eyebrow">First card setup</p><h2>Create your digital card</h2><p>Add only the details you want visitors to see. You can change or disable the profile later.</p><div class="form-grid">${setupField("name", "text", true)}${setupField("company", "text")}${setupField("title", "text")}${setupField("phone", "tel")}${setupField("email", "email")}${setupField("website", "url")}${setupField("linkedin", "url")}${setupField("instagram", "url")}${setupField("address", "text")}${setupField("bio", "textarea")}</div><button class="button button-primary" type="submit">Create my profile and card</button><p role="status"></p></form></div>`;
-    bindAccountActions();
-    document.querySelector("#setup-form").addEventListener("submit", createFirstProfile);
+  function createProfileForm(id, heading, intro, buttonLabel) {
+    return `<form id="${id}" class="saved-card owner-form setup-card create-profile-form"><p class="eyebrow">Card profile setup</p><h2>${heading}</h2><p>${intro}</p><div class="form-grid">${setupField("name", "text", true)}${setupField("company", "text")}${setupField("title", "text")}${setupField("phone", "tel")}${setupField("email", "email")}${setupField("website", "url")}${setupField("linkedin", "url")}${setupField("instagram", "url")}${setupField("address", "text")}${setupField("bio", "textarea")}</div><button class="button button-primary" type="submit">${buttonLabel}</button><p role="status"></p></form>`;
   }
 
-  async function createFirstProfile(event) {
+  function renderFirstProfileSetup() {
+    root.innerHTML = `<div class="dashboard-stack">${userBar()}${createProfileForm("setup-form", "Create your first digital card", "Add only the details you want visitors to see. You can change or disable the profile later.", "Create profile and card")}</div>`;
+    bindAccountActions();
+    bindCreateProfileForms();
+  }
+
+  async function createProfile(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const message = form.querySelector('[role="status"]');
@@ -73,7 +93,7 @@
     const args = {};
     ["name", "company", "title", "phone", "email", "website", "linkedin", "instagram", "address", "bio"].forEach((field) => { args[`p_${field}`] = values[field] || null; });
     button.disabled = true;
-    message.textContent = "Creating your secure card URL…";
+    message.textContent = "Creating the profile and secure card URL…";
     const { error } = await client.rpc("create_my_digital_card", args);
     if (error) { message.textContent = error.message; button.disabled = false; return; }
     await loadDashboard();
@@ -90,8 +110,9 @@
   }
 
   function renderDashboard(profiles, cards) {
-    root.innerHTML = `<div class="dashboard-stack">${userBar()}<section class="dashboard-section"><div class="dashboard-section-heading"><div><p class="eyebrow">Public information</p><h2>Your profile</h2></div></div><div class="saved-grid">${profiles.map((profile) => `<form class="saved-card owner-form profile-form" data-id="${profile.id}"><div class="form-grid">${fields.map((field) => profileField(profile, field)).join("")}</div><label class="checkbox-label"><input type="checkbox" name="is_active" ${profile.is_active ? "checked" : ""}> Make this profile publicly available</label><div class="upload-row"><label>Upload profile photo<input type="file" accept="image/png,image/jpeg,image/webp" data-upload="profile_image_url"></label><span></span></div><div class="upload-row"><label>Upload company logo<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" data-upload="logo_url"></label><span></span></div><button class="button button-primary" type="submit">Save profile</button><p role="status"></p></form>`).join("")}</div></section><section class="dashboard-section"><div class="dashboard-section-heading"><div><p class="eyebrow">NFC and QR</p><h2>Your physical cards</h2></div></div><div class="saved-grid">${cards.map(cardMarkup).join("")}</div></section></div>`;
+    root.innerHTML = `<div class="dashboard-stack">${userBar()}<details class="new-card-panel"><summary class="button button-primary">Create another card profile</summary>${createProfileForm("new-card-form", "Create another digital card", "Each profile receives a separate random public URL and QR code.", "Create new profile and card")}</details><section class="dashboard-section"><div class="dashboard-section-heading"><div><p class="eyebrow">Public information</p><h2>Card profiles</h2></div></div><div class="saved-grid">${profiles.map((profile) => `<form class="saved-card owner-form profile-form" data-id="${profile.id}"><div class="form-grid">${fields.map((field) => profileField(profile, field)).join("")}</div><label class="checkbox-label"><input type="checkbox" name="is_active" ${profile.is_active ? "checked" : ""}> Make this profile publicly available</label><div class="upload-row"><label>Upload profile photo<input type="file" accept="image/png,image/jpeg,image/webp" data-upload="profile_image_url"></label><span></span></div><div class="upload-row"><label>Upload company logo<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" data-upload="logo_url"></label><span></span></div><button class="button button-primary" type="submit">Save profile</button><p role="status"></p></form>`).join("")}</div></section><section class="dashboard-section"><div class="dashboard-section-heading"><div><p class="eyebrow">NFC and QR</p><h2>Physical cards</h2></div></div><div class="saved-grid">${cards.map(cardMarkup).join("")}</div></section></div>`;
     bindAccountActions();
+    bindCreateProfileForms();
     document.querySelectorAll(".profile-form").forEach((form) => form.addEventListener("submit", saveProfile));
     document.querySelectorAll("[data-copy]").forEach((button) => button.addEventListener("click", async () => { await navigator.clipboard.writeText(button.dataset.copy); button.textContent = "Copied"; }));
     document.querySelectorAll("[data-qr]").forEach(drawQrCode);
@@ -143,6 +164,10 @@
 
   function bindAccountActions() {
     document.querySelector("#sign-out")?.addEventListener("click", async () => { await client.auth.signOut(); currentUser = null; renderLogin(); });
+  }
+
+  function bindCreateProfileForms() {
+    document.querySelectorAll(".create-profile-form").forEach((form) => form.addEventListener("submit", createProfile));
   }
 
   init();

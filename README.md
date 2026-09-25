@@ -18,12 +18,14 @@ Contact downloads and Apple/Google Wallet buttons are intentionally non-function
 1. Create a Supabase project and run `supabase/migrations/001_mucci_digital_cards.sql`, followed by `supabase/migrations/002_owner_profile_setup.sql`, in its SQL editor.
 2. In Supabase Authentication, enable Email. Set the Site URL to `https://mucciproducts.com` and add `https://mucciproducts.com/card-dashboard/` to Redirect URLs.
 3. Set `supabaseUrl`, `supabaseAnonKey`, and the final `publicSiteUrl` in `config.js`. The anon key is public by design; never use the service-role key in this repository.
-4. In **Authentication → Users**, invite or create the owner's email. Open `/card-dashboard/`, request a sign-in link, and complete the first-card setup form. Public self-registration is disabled; the authenticated RPC creates the invited owner's profile and one physical card with a random 48-character token.
+4. In **Authentication → Users**, create `anthony@mucciproducts.com` and set its password. Open `/card-dashboard/` and sign in with that administrator account. Public registration is disabled. The administrator can create multiple profiles; every profile receives a physical-card record with a separate random 48-character token.
 5. Program the displayed `https://mucciproducts.com/card/{token}` URL onto the NFC tag with NFC Tools or NXP TagWriter.
 
-### Branded sign-in email
+### Optional branded authentication emails
 
-For a hosted Supabase project, committed templates are not applied automatically. In **Supabase Dashboard → Authentication → Email Templates**:
+Normal administrator sign-in uses email and password and does not send an email, avoiding magic-link email rate limits. The committed templates are optional for future invitation or passwordless flows and are not applied automatically to hosted Supabase projects.
+
+If those flows are enabled later, use **Supabase Dashboard → Authentication → Email Templates**:
 
 1. Under **Magic Link**, set the subject to `Your Mucci Digital Cards sign-in link` and copy `supabase/templates/magic-link.html` into the message body.
 2. Under **Invite user**, set the subject to `Your Mucci Digital Cards invitation` and copy `supabase/templates/invite.html` into the message body.
