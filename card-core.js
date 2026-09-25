@@ -74,7 +74,16 @@
   }
 
   function generateVCard(profile) {
-    const lines = ["BEGIN:VCARD", "VERSION:3.0", `FN:${escapeVCard(profile.name)}`];
+    const nameParts = String(profile.name || "").trim().split(/\s+/).filter(Boolean);
+    const familyName = nameParts.length > 1 ? nameParts.pop() : "";
+    const givenNames = nameParts.join(" ") || (familyName ? "" : String(profile.name || "").trim());
+    const lines = [
+      "BEGIN:VCARD",
+      "VERSION:3.0",
+      "PRODID:-//Mucci Products//Digital Card//EN",
+      `N:${escapeVCard(familyName)};${escapeVCard(givenNames)};;;`,
+      `FN:${escapeVCard(profile.name)}`,
+    ];
     if (profile.company) lines.push(`ORG:${escapeVCard(profile.company)}`);
     if (profile.title) lines.push(`TITLE:${escapeVCard(profile.title)}`);
     if (profile.phone) lines.push(`TEL;TYPE=CELL:${escapeVCard(profile.phone)}`);

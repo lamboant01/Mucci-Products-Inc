@@ -112,7 +112,15 @@
     }
   }
 
-  function saveCardImage(profile) {
+  function canvasBlob(canvas) {
+    return new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("image-creation-failed")), "image/png"));
+  }
+
+  async function saveCardImage(profile) {
+    const button = document.querySelector("#save-image");
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = "Preparing image…";
     const canvas = document.createElement("canvas"); canvas.width = 1200; canvas.height = 630;
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "#f7fbfd"; ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -122,7 +130,29 @@
     ctx.font = "600 40px Arial"; if (profile.company) ctx.fillText(profile.company, 94, 380);
     ctx.font = "28px Arial"; ctx.fillText([profile.phone, profile.email].filter(Boolean).join("  •  "), 94, 500);
     ctx.font = "600 24px Arial"; ctx.fillStyle = "#0a557b"; ctx.fillText("MUCCI DIGITAL CARDS", 94, 90);
-    const anchor = document.createElement("a"); anchor.download = "mucci-digital-card.png"; anchor.href = canvas.toDataURL("image/png"); anchor.click();
+    try {
+      const blob = await canvasBlob(canvas);
+      const filename = `${safeFilename(profile.name)}-digital-card.png`;
+      const file = new File([blob], filename, { type: "image/png" });
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        button.textContent = "Choose Save Image…";
+        await navigator.share({ files: [file], title: `${profile.name || "Mucci"} digital card` });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.download = filename;
+        anchor.href = url;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }
+    } catch (error) {
+      if (error && error.name !== "AbortError") window.alert("The card image could not be saved. Please try again.");
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
   }
 
   function renderError(message) {
