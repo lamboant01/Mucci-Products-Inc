@@ -116,6 +116,23 @@
     return new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("image-creation-failed")), "image/png"));
   }
 
+  function loadCanvasImage(source) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.crossOrigin = "anonymous";
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = source;
+    });
+  }
+
+  function drawContainedImage(ctx, image, x, y, width, height) {
+    const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+    const drawWidth = image.naturalWidth * scale;
+    const drawHeight = image.naturalHeight * scale;
+    ctx.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
+  }
+
   async function saveCardImage(profile) {
     const button = document.querySelector("#save-image");
     const originalLabel = button.textContent;
@@ -131,6 +148,11 @@
     ctx.font = "28px Arial"; ctx.fillText([profile.phone, profile.email].filter(Boolean).join("  •  "), 94, 500);
     ctx.font = "600 24px Arial"; ctx.fillStyle = "#0a557b"; ctx.fillText("MUCCI DIGITAL CARDS", 94, 90);
     try {
+      const profileLogo = safeUrl(profile.logo_url);
+      let logo;
+      try { logo = await loadCanvasImage(profileLogo || `${siteBase()}/assets/mucci-products-logo.png`); }
+      catch (_) { logo = await loadCanvasImage(`${siteBase()}/assets/mucci-products-logo.png`); }
+      drawContainedImage(ctx, logo, 930, 38, 190, 90);
       const blob = await canvasBlob(canvas);
       const filename = `${safeFilename(profile.name)}-digital-card.png`;
       const file = new File([blob], filename, { type: "image/png" });
