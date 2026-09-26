@@ -5,18 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Get a quick estimate for your custom 3D printing project." />
     <meta name="theme-color" content="#082a4a" />
-    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./estimator.css" />
+    <link rel="stylesheet" href="/estimator/estimator.css" />
     <title>3D Printing Estimate | Mucci Products</title>
   </head>
   <body>
     <a class="skip-link" href="#estimate-form">Skip to estimator</a>
     <header class="site-header">
-      <a class="wordmark" href="../" aria-label="Mucci Products, home"><img src="../assets/mucci-products-logo.png" alt="Mucci Products" /></a>
-      <a class="header-link" href="../">Back to home</a>
+      <a class="wordmark" href="/" aria-label="Mucci Products, home"><img src="/assets/mucci-products-logo.png" alt="Mucci Products" /></a>
+      <div class="header-actions">
+        <a class="header-link" href="/">Back to home</a>
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-menu" aria-label="Open menu">
+          <span></span><span></span><span></span>
+        </button>
+        <nav id="mobile-menu" class="mobile-menu" aria-label="Mobile navigation" hidden>
+          <a href="/">Home</a>
+          <a href="/#work">Work</a>
+          <a href="/my-cards/">My Cards</a>
+          <a href="/card-dashboard/">Admin Sign In</a>
+          <a href="/#shop">Shop</a>
+          <a href="https://www.etsy.com/shop/MucciProducts?ref=dashboard-header" target="_blank" rel="noreferrer">Etsy <span aria-hidden="true">↗</span></a>
+          <a href="https://www.instagram.com/mucciproducts/" target="_blank" rel="noreferrer">Instagram <span aria-hidden="true">↗</span></a>
+        </nav>
+      </div>
     </header>
 
     <main class="page-shell">
@@ -36,7 +50,7 @@
               <label class="choice"><input type="radio" name="file_status" value="design" /><span>No, I need it designed</span></label>
             </div>
             <label id="file-upload-row" class="field hidden">3D model file
-              <input id="model-file" type="file" accept=".stl,.3mf,.obj,.step,.stp" />
+              <input id="model-file" type="file" />
               <small>STL, 3MF, OBJ, STEP, or STP. Maximum 25 MB and 250 × 250 × 250 mm. Your browser prepares the model locally before submission.</small>
             </label>
             <div id="model-preview" class="model-preview hidden" aria-label="Interactive 3D model preview">
@@ -109,11 +123,12 @@
       </div>
     </main>
 
-    <footer><a class="wordmark" href="../"><img src="../assets/mucci-products-logo.png" alt="Mucci Products" /></a><p>Designing useful things, one project at a time.</p></footer>
+    <footer><a class="wordmark" href="/"><img src="/assets/mucci-products-logo.png" alt="Mucci Products" /></a><p>Designing useful things, one project at a time.</p></footer>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="../config.js"></script>
+    <script src="/config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js"></script>
-    <script src="./gcode-time.js"></script>
-    <script type="module" src="./estimator.js"></script>
+    <script src="/estimator/mobile-menu.js"></script>
+    <script src="/estimator/gcode-time.js"></script>
+    <script type="module" src="/estimator/estimator.js"></script>
   </body>
 </html>
