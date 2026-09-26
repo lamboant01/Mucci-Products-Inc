@@ -50,24 +50,23 @@
           </fieldset>
 
           <fieldset>
-            <legend><span>3</span> Do you know the estimated print time?</legend>
-            <p class="help emphasis">Enter the print time for <strong>one item</strong>. Quantity is accounted for automatically.</p>
-            <div class="choice-grid">
-              <label class="choice"><input required type="radio" name="knows_time" value="yes" /><span>Yes</span></label>
-              <label class="choice"><input type="radio" name="knows_time" value="no" /><span>No</span></label>
+            <legend><span>3</span> How should we estimate the print time?</legend>
+            <p class="help emphasis">Print time is always for <strong>one item</strong>. Quantity is accounted for automatically.</p>
+            <div class="choice-grid choice-grid-wide">
+              <label class="choice"><input required type="radio" name="time_method" value="gcode" /><span>Import slicer G-code</span></label>
+              <label class="choice"><input type="radio" name="time_method" value="manual" /><span>Enter it myself</span></label>
+              <label class="choice"><input type="radio" name="time_method" value="unknown" /><span>I don't know</span></label>
             </div>
+            <label id="gcode-time-field" class="field hidden">Import G-code for one item
+              <input id="gcode-file" type="file" accept=".gcode,.gco,.gc,text/x-gcode" />
+              <small>Export G-code from your slicer first. The file stays on your device and is used only to read its embedded time estimate.</small>
+              <span id="gcode-time-status" class="import-status" role="status"></span>
+            </label>
             <div id="known-time-fields" class="inline-fields hidden">
               <label class="field">Hours per item<input type="number" name="print_hours" min="0" max="1000" value="0" inputmode="numeric" /></label>
               <label class="field">Minutes per item<input type="number" name="print_minutes" min="0" max="59" value="0" inputmode="numeric" /></label>
             </div>
-            <label id="size-field" class="field hidden">Approximate item size
-              <select name="size_category">
-                <option value="">Select a size</option>
-                <option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option>
-                <option value="extra_large">Extra Large</option><option value="not_sure">Not Sure</option>
-              </select>
-              <small>We will show a wider estimate range. Final pricing requires file review.</small>
-            </label>
+            <p id="unknown-time-note" class="notice hidden">We will show a wider estimate range. Final pricing requires file review.</p>
           </fieldset>
 
           <fieldset>
@@ -76,8 +75,9 @@
               <label class="choice"><input required type="radio" name="colour_count" value="1" /><span>1</span></label>
               <label class="choice"><input type="radio" name="colour_count" value="2" /><span>2</span></label>
               <label class="choice"><input type="radio" name="colour_count" value="3" /><span>3</span></label>
-              <label class="choice"><input type="radio" name="colour_count" value="4+" /><span>4+</span></label>
+              <label class="choice"><input type="radio" name="colour_count" value="4" /><span>4</span></label>
             </div>
+            <p class="help">Maximum 4 colours.</p>
           </fieldset>
 
           <fieldset>
@@ -99,12 +99,9 @@
           </fieldset>
 
           <fieldset>
-            <legend><span>7</span> Project and contact details</legend>
+            <legend><span>7</span> Project details</legend>
             <label class="field">Anything else we should know?<textarea name="notes" maxlength="3000" rows="4"></textarea></label>
-            <div class="inline-fields">
-              <label class="field">Name<input required name="name" maxlength="120" autocomplete="name" /></label>
-              <label class="field">Email<input required type="email" name="email" maxlength="254" autocomplete="email" inputmode="email" /></label>
-            </div>
+            <label class="field">Name <small>Optional. Your Etsy conversation is the contact method for this estimate.</small><input name="name" maxlength="120" autocomplete="name" /></label>
           </fieldset>
 
           <div class="form-actions">
@@ -119,6 +116,7 @@
     <footer><a class="wordmark" href="../"><img src="../assets/mucci-products-logo.png" alt="Mucci Products" /></a><p>Designing useful things, one project at a time.</p></footer>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../config.js"></script>
+    <script src="./gcode-time.js"></script>
     <script src="./estimator.js"></script>
   </body>
 </html>

@@ -7,9 +7,11 @@
   const config = window.MUCCI_CONFIG || {};
   const maxFileBytes = 25 * 1024 * 1024;
   const supportedExtensions = ["stl", "3mf", "obj", "step", "stp"];
+  const gcodeTime = window.MucciGcodeTime;
   let calculatedPayload = null;
   let calculatedResult = null;
   let publicOptions = null;
+  let importedPrintTime = null;
 
   if (!config.supabaseUrl || !config.supabaseAnonKey || !window.supabase) {
     form.innerHTML = '<p class="notice">The estimator is temporarily unavailable. Please contact Mucci Products through Etsy.</p>';
@@ -34,26 +36,54 @@
   function updateConditionalFields() {
     const fileStatus = selected("file_status");
     document.querySelector("#file-upload-row").classList.toggle("hidden", !["ready", "modify"].includes(fileStatus));
-    const knowsTime = selected("knows_time");
-    document.querySelector("#known-time-fields").classList.toggle("hidden", knowsTime !== "yes");
-    document.querySelector("#size-field").classList.toggle("hidden", knowsTime !== "no");
-    form.elements.size_category.required = knowsTime === "no";
-    form.elements.print_hours.required = knowsTime === "yes";
-    form.elements.print_minutes.required = knowsTime === "yes";
+    const timeMethod = selected("time_method");
+    document.querySelector("#gcode-time-field").classList.toggle("hidden", timeMethod !== "gcode");
+    document.querySelector("#known-time-fields").classList.toggle("hidden", timeMethod !== "manual");
+    document.querySelector("#unknown-time-note").classList.toggle("hidden", timeMethod !== "unknown");
+    document.querySelector("#gcode-file").required = timeMethod === "gcode";
+    form.elements.print_hours.required = timeMethod === "manual";
+    form.elements.print_minutes.required = timeMethod === "manual";
   }
 
   function payloadFromForm() {
     const values = Object.fromEntries(new FormData(form));
+    const timeMethod = values.time_method;
+    const imported = timeMethod === "gcode" ? importedPrintTime : null;
     return {
       p_file_status: values.file_status,
       p_quantity: Number(values.quantity),
-      p_print_hours_per_item: values.knows_time === "yes" ? Number(values.print_hours) : null,
-      p_print_minutes_per_item: values.knows_time === "yes" ? Number(values.print_minutes) : null,
-      p_size_category: values.knows_time === "no" ? values.size_category : null,
+      p_print_hours_per_item: imported ? imported.hours : timeMethod === "manual" ? Number(values.print_hours) : null,
+      p_print_minutes_per_item: imported ? imported.minutes : timeMethod === "manual" ? Number(values.print_minutes) : null,
+      p_size_category: timeMethod === "unknown" ? "not_sure" : null,
       p_colour_count: values.colour_count,
       p_design_level: values.design_level,
       p_assembly_required: values.assembly_required === "true"
     };
+  }
+
+  async function readGcodeEstimate(file) {
+    if (!gcodeTime) throw new Error("The G-code time importer did not load. Please enter the time manually.");
+    const chunkBytes = 2 * 1024 * 1024;
+    const first = await file.slice(0, chunkBytes).text();
+    const last = file.size > chunkBytes ? await file.slice(Math.max(chunkBytes, file.size - chunkBytes)).text() : "";
+    const parsed = gcodeTime.parse(`${first}\n${last}`);
+    if (!parsed) throw new Error("No embedded print-time estimate was found. Export the file from your slicer again or enter the time manually.");
+    return { ...gcodeTime.toHoursMinutes(parsed.seconds), source:parsed.source };
+  }
+
+  async function importGcode(event) {
+    const status = document.querySelector("#gcode-time-status");
+    importedPrintTime = null;
+    status.textContent = "";
+    const file = event.target.files[0];
+    if (!file) return;
+    status.textContent = "Reading the slicer estimate…";
+    try {
+      importedPrintTime = await readGcodeEstimate(file);
+      status.textContent = `Detected ${importedPrintTime.hours} hours ${importedPrintTime.minutes} minutes per item.`;
+    } catch (error) {
+      status.textContent = error.message;
+    }
   }
 
   function validateFile() {
@@ -72,6 +102,7 @@
     try {
       validateFile();
       const payload = payloadFromForm();
+      if (selected("time_method") === "gcode" && !importedPrintTime) throw new Error("Import G-code containing a slicer print-time estimate, or choose another time option.");
       if (payload.p_print_hours_per_item === 0 && payload.p_print_minutes_per_item === 0 && !payload.p_size_category) throw new Error("Enter a print time greater than zero for one item.");
       const button = form.querySelector('button[type="submit"]');
       button.disabled = true;
@@ -117,7 +148,8 @@
       }
       const { data, error } = await client.rpc("submit_print_estimate", {
         ...calculatedPayload,
-        p_name: values.name.trim(), p_email: values.email.trim(), p_file_path: filePath, p_notes: values.notes.trim() || null
+        p_name: values.name.trim() || null, p_file_path: filePath,
+        p_print_time_source: values.time_method, p_notes: values.notes.trim() || null
       });
       if (error) throw error;
       const submission = Array.isArray(data) ? data[0] : data;
@@ -143,9 +175,10 @@
 
   form.addEventListener("change", (event) => {
     if (event.target.name === "file_status") renderDesignOptions();
-    if (["file_status", "knows_time"].includes(event.target.name)) updateConditionalFields();
+    if (["file_status", "time_method"].includes(event.target.name)) updateConditionalFields();
     if (calculatedPayload) { calculatedPayload = null; calculatedResult = null; result.classList.add("hidden"); result.innerHTML = ""; }
   });
+  document.querySelector("#gcode-file").addEventListener("change", importGcode);
   form.addEventListener("submit", calculate);
   updateConditionalFields();
   (async function loadPublicOptions() {

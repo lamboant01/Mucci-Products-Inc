@@ -8,9 +8,13 @@ The customer estimator is available at `/estimator/`. It calculates through a
 narrow Supabase function, submits requests under a short quote code, and uploads
 optional model files to a private Storage bucket. The protected lookup page is
 available at `/admin/estimates/` and reuses the existing administrator account.
+Customers can import slicer-generated G-code to read its embedded print-time
+estimate locally in the browser; the G-code itself is not uploaded. They can
+also enter the time manually or choose an unknown-time estimate requiring review.
 
-Run `supabase/migrations/004_print_estimator.sql` after migrations 001 through
-003. All private pricing values and size-to-hours assumptions are centralized in
+Run `supabase/migrations/004_print_estimator.sql` and then
+`supabase/migrations/005_estimator_gcode_and_etsy_contact.sql` after migrations
+001 through 003. All private pricing values and fallback-time assumptions are centralized in
 the single-row `print_estimator_config` table created by that migration. Update
 that row in Supabase to change pricing without editing the public website.
 
