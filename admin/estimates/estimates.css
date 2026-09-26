@@ -1,0 +1,18 @@
+.admin-tools { display:grid; gap:18px; }
+.admin-search { display:flex; gap:10px; padding:20px; border:1px solid rgba(8,42,74,.2); background:#fff; }
+.admin-search input { min-width:0; flex:1; min-height:48px; padding:11px 13px; border:1px solid rgba(8,42,74,.3); font:inherit; text-transform:uppercase; }
+.estimate-list { display:grid; gap:14px; }
+.estimate-card { padding:24px; border:1px solid #082a4a; background:#fff; }
+.estimate-card header { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; margin-bottom:18px; }
+.estimate-card h2 { margin:0; font-size:1.5rem; }
+.status-badge { padding:6px 10px; border-radius:999px; background:#dff8f7; font-size:.78rem; font-weight:800; text-transform:uppercase; }
+.manual-flag { color:#8c271e; font-weight:800; }
+.estimate-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin:0 0 18px; }
+.estimate-grid div { padding:10px; background:#f7fbfd; }
+.estimate-grid dt { margin-bottom:4px; color:#496479; font-size:.78rem; font-weight:700; text-transform:uppercase; }
+.estimate-grid dd { margin:0; overflow-wrap:anywhere; }
+.notes { padding:14px; border-left:4px solid #16b8b4; background:#f7fbfd; white-space:pre-wrap; }
+.card-actions { display:flex; flex-wrap:wrap; gap:9px; margin-top:18px; }
+.empty-state { padding:24px; border:1px solid rgba(8,42,74,.2); background:#fff; }
+@media (max-width:700px) { .estimate-grid { grid-template-columns:1fr 1fr; } }
+@media (max-width:480px) { .admin-search { align-items:stretch; flex-direction:column; } .estimate-grid { grid-template-columns:1fr; } .card-actions>* { width:100%; } }

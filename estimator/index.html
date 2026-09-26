@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Get a quick estimate for your custom 3D printing project." />
+    <meta name="theme-color" content="#082a4a" />
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./estimator.css" />
+    <title>3D Printing Estimate | Mucci Products</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#estimate-form">Skip to estimator</a>
+    <header class="site-header">
+      <a class="wordmark" href="../" aria-label="Mucci Products, home"><img src="../assets/mucci-products-logo.png" alt="Mucci Products" /></a>
+      <a class="header-link" href="../">Back to home</a>
+    </header>
+
+    <main class="page-shell">
+      <section class="intro">
+        <p class="eyebrow">Custom 3D printing</p>
+        <h1>3D Printing Estimate</h1>
+        <p>Get a quick estimate for your custom 3D printing project.</p>
+      </section>
+
+      <div id="estimator-app">
+        <form id="estimate-form" class="estimate-form">
+          <fieldset>
+            <legend><span>1</span> Do you already have a 3D file?</legend>
+            <div class="choice-grid choice-grid-wide">
+              <label class="choice"><input required type="radio" name="file_status" value="ready" /><span>Yes, ready to print</span></label>
+              <label class="choice"><input type="radio" name="file_status" value="modify" /><span>Yes, but it needs modifications</span></label>
+              <label class="choice"><input type="radio" name="file_status" value="design" /><span>No, I need it designed</span></label>
+            </div>
+            <label id="file-upload-row" class="field hidden">Optional 3D file
+              <input id="model-file" type="file" accept=".stl,.3mf,.obj,.step,.stp" />
+              <small>STL, 3MF, OBJ, STEP, or STP. Maximum 25 MB.</small>
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend><span>2</span> Quantity</legend>
+            <label class="field compact">Number of identical items
+              <input required type="number" name="quantity" value="1" min="1" max="999" inputmode="numeric" />
+            </label>
+            <p class="help">Ordering multiple copies of the same part can reduce the average cost per item.</p>
+          </fieldset>
+
+          <fieldset>
+            <legend><span>3</span> Do you know the estimated print time?</legend>
+            <p class="help emphasis">Enter the print time for <strong>one item</strong>. Quantity is accounted for automatically.</p>
+            <div class="choice-grid">
+              <label class="choice"><input required type="radio" name="knows_time" value="yes" /><span>Yes</span></label>
+              <label class="choice"><input type="radio" name="knows_time" value="no" /><span>No</span></label>
+            </div>
+            <div id="known-time-fields" class="inline-fields hidden">
+              <label class="field">Hours per item<input type="number" name="print_hours" min="0" max="1000" value="0" inputmode="numeric" /></label>
+              <label class="field">Minutes per item<input type="number" name="print_minutes" min="0" max="59" value="0" inputmode="numeric" /></label>
+            </div>
+            <label id="size-field" class="field hidden">Approximate item size
+              <select name="size_category">
+                <option value="">Select a size</option>
+                <option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option>
+                <option value="extra_large">Extra Large</option><option value="not_sure">Not Sure</option>
+              </select>
+              <small>We will show a wider estimate range. Final pricing requires file review.</small>
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend><span>4</span> Number of colours</legend>
+            <div class="choice-grid four-up">
+              <label class="choice"><input required type="radio" name="colour_count" value="1" /><span>1</span></label>
+              <label class="choice"><input type="radio" name="colour_count" value="2" /><span>2</span></label>
+              <label class="choice"><input type="radio" name="colour_count" value="3" /><span>3</span></label>
+              <label class="choice"><input type="radio" name="colour_count" value="4+" /><span>4+</span></label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend><span>5</span> 3D design</legend>
+            <div id="design-options" class="choice-stack"></div>
+            <details class="help-details">
+              <summary>What counts as each?</summary>
+              <div class="design-help"><p><strong>Simple:</strong> basic brackets, holders, signs, replacement parts, or simple modifications.</p><p><strong>Medium:</strong> several fitted features, functional parts, several measurements, or moderate reference-image modelling.</p><p><strong>Complex:</strong> detailed reference-image modelling, complex geometry, intricate multi-part models, or substantial custom modelling.</p></div>
+            </details>
+          </fieldset>
+
+          <fieldset>
+            <legend><span>6</span> Does this project require significant assembly after printing?</legend>
+            <div class="choice-grid">
+              <label class="choice"><input required type="radio" name="assembly_required" value="false" /><span>No</span></label>
+              <label class="choice"><input type="radio" name="assembly_required" value="true" /><span>Yes</span></label>
+            </div>
+            <p class="help">Assembly projects start at +<span id="assembly-price">…</span> CAD and require manual confirmation.</p>
+          </fieldset>
+
+          <fieldset>
+            <legend><span>7</span> Project and contact details</legend>
+            <label class="field">Anything else we should know?<textarea name="notes" maxlength="3000" rows="4"></textarea></label>
+            <div class="inline-fields">
+              <label class="field">Name<input required name="name" maxlength="120" autocomplete="name" /></label>
+              <label class="field">Email<input required type="email" name="email" maxlength="254" autocomplete="email" inputmode="email" /></label>
+            </div>
+          </fieldset>
+
+          <div class="form-actions">
+            <button class="primary-button" type="submit" disabled>Loading estimator…</button>
+            <p id="form-message" role="alert"></p>
+          </div>
+        </form>
+        <section id="estimate-result" class="result-card hidden" aria-live="polite"></section>
+      </div>
+    </main>
+
+    <footer><a class="wordmark" href="../"><img src="../assets/mucci-products-logo.png" alt="Mucci Products" /></a><p>Designing useful things, one project at a time.</p></footer>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../config.js"></script>
+    <script src="./estimator.js"></script>
+  </body>
+</html>

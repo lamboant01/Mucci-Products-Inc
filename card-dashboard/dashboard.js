@@ -106,7 +106,7 @@
   }
 
   function userBar() {
-    return `<div class="dashboard-user"><p>Signed in as <strong>${escapeHtml(currentUser.email)}</strong></p><button class="button button-secondary" id="sign-out" type="button">Sign out</button></div>`;
+    return `<div class="dashboard-user"><p>Signed in as <strong>${escapeHtml(currentUser.email)}</strong></p><div class="saved-card-actions"><a class="button button-secondary" href="../admin/estimates/">3D Print Estimates</a><button class="button button-secondary" id="sign-out" type="button">Sign out</button></div></div>`;
   }
 
   function profileField(profile, field) {

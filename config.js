@@ -6,5 +6,6 @@
 window.MUCCI_CONFIG = {
   supabaseUrl: "https://smeiqbkjsvkwlqjxkxrn.supabase.co",
   supabaseAnonKey: "sb_publishable_6VT_ekiAjyw-_kkPAYsbbA_apcmd1-U",
-  publicSiteUrl: "https://mucciproducts.com/"
+  publicSiteUrl: "https://mucciproducts.com/",
+  etsyUrl: "https://www.etsy.com/shop/MucciProducts?ref=dashboard-header"
 };
