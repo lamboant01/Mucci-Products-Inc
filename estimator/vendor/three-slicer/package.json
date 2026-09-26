@@ -1,0 +1,139 @@
+{
+  "name": "three-slicer",
+  "version": "0.3.2",
+  "description": "Browser/WASM 3D-printing slicer reverse-engineered from OrcaSlicer: slicing engine (Arachne walls, tree/grid supports, multi-material), SLA resin slicing with PrusaSlicer's ported support/pad chain and .sl1 export, React viewer with GPU toolpath preview, and schema-driven settings UI.",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./engine/index.d.ts",
+      "default": "./engine/index.js"
+    },
+    "./settings": {
+      "types": "./types/settings.d.ts",
+      "default": "./engine/src/settings.js"
+    },
+    "./toggle": {
+      "types": "./types/toggle.d.ts",
+      "default": "./engine/src/toggle_eval.js"
+    },
+    "./worker": {
+      "types": "./types/worker.d.ts",
+      "default": "./engine/src/slicer.worker.js"
+    },
+    "./client": {
+      "types": "./types/client.d.ts",
+      "default": "./engine/src/client.js"
+    },
+    "./wasm": {
+      "types": "./types/wasm.d.ts",
+      "default": "./engine/src/slicer_core.js"
+    },
+    "./wasm-mt": {
+      "types": "./types/wasm.d.ts",
+      "default": "./engine/src/slicer_core.mt.js"
+    },
+    "./viewer": {
+      "types": "./types/viewer.d.ts",
+      "default": "./viewer/dist/Viewport.js"
+    },
+    "./viewer/toolpath": {
+      "types": "./types/viewer-toolpath.d.ts",
+      "default": "./viewer/dist/toolpath_reexport.js"
+    },
+    "./viewer/loaders": {
+      "types": "./types/viewer-loaders.d.ts",
+      "default": "./viewer/dist/loaders_reexport.js"
+    },
+    "./viewer/gcode": {
+      "types": "./types/viewer-gcode.d.ts",
+      "default": "./viewer/dist/gcode_reexport.js"
+    },
+    "./components": {
+      "types": "./types/components.d.ts",
+      "default": "./components/dist/SettingsPanel.js"
+    },
+    "./data": {
+      "types": "./types/data.d.ts",
+      "default": "./engine/src/data.js"
+    },
+    "./data/*": {
+      "types": "./types/data/*.d.ts",
+      "default": "./data/*"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "node types/gen_settings_types.mjs && node types/gen_kernel_params.mjs && vite build --config components/vite.config.js && vite build --config viewer/vite.config.js",
+    "check": "bash pack_check.sh"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "three": "^0.160.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "three": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vite": "^5.4.11"
+  },
+  "files": [
+    "engine",
+    "types",
+    "!**/tests/**",
+    "!types/gen_*.mjs",
+    "components/dist",
+    "viewer/dist",
+    "data",
+    "data/ui-tree-keys.json",
+    "data/config-schema-lean.json",
+    "!data/config-schema-builddump.json",
+    "README.md",
+    "CHANGELOG.md",
+    "THIRD-PARTY-NOTICES.md",
+    "LICENSE.txt",
+    "!**/.omc"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kimgh06/Three_Slicer.git",
+    "directory": "packages"
+  },
+  "homepage": "https://slicer.kimgh06.com",
+  "keywords": [
+    "3d-printing",
+    "slicer",
+    "gcode",
+    "sla",
+    "resin",
+    "sl1",
+    "msla",
+    "stl",
+    "wasm",
+    "orcaslicer",
+    "three",
+    "three.js",
+    "react",
+    "arachne",
+    "tree-support",
+    "three-slicer",
+    "slicer",
+    "3d",
+    "mesh",
+    "clipping"
+  ],
+  "dependencies": {
+    "three-slicer-viewer": "0.3.2"
+  }
+}

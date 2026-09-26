@@ -35,10 +35,15 @@
               <label class="choice"><input type="radio" name="file_status" value="modify" /><span>Yes, but it needs modifications</span></label>
               <label class="choice"><input type="radio" name="file_status" value="design" /><span>No, I need it designed</span></label>
             </div>
-            <label id="file-upload-row" class="field hidden">Optional 3D file
+            <label id="file-upload-row" class="field hidden">3D model file
               <input id="model-file" type="file" accept=".stl,.3mf,.obj,.step,.stp" />
-              <small>STL, 3MF, OBJ, STEP, or STP. Maximum 25 MB.</small>
+              <small>STL, 3MF, OBJ, STEP, or STP. Maximum 25 MB and 250 × 250 × 250 mm. Your browser prepares the model locally before submission.</small>
             </label>
+            <div id="model-preview" class="model-preview hidden" aria-label="Interactive 3D model preview">
+              <div id="model-viewer"></div>
+              <p id="model-status" role="status">Preparing preview…</p>
+              <small>Drag to rotate. Scroll or pinch to zoom.</small>
+            </div>
           </fieldset>
 
           <fieldset>
@@ -50,23 +55,14 @@
           </fieldset>
 
           <fieldset>
-            <legend><span>3</span> How should we estimate the print time?</legend>
-            <p class="help emphasis">Print time is always for <strong>one item</strong>. Quantity is accounted for automatically.</p>
+            <legend><span>3</span> Choose a print profile</legend>
+            <p class="help emphasis">The selected profile affects print detail and estimated production time for <strong>one item</strong>. Quantity is accounted for automatically.</p>
             <div class="choice-grid choice-grid-wide">
-              <label class="choice"><input required type="radio" name="time_method" value="gcode" /><span>Import slicer G-code</span></label>
-              <label class="choice"><input type="radio" name="time_method" value="manual" /><span>Enter it myself</span></label>
-              <label class="choice"><input type="radio" name="time_method" value="unknown" /><span>I don't know</span></label>
+              <label class="choice"><input required type="radio" name="print_profile" value="detailed" /><span>Detailed</span></label>
+              <label class="choice"><input type="radio" name="print_profile" value="standard" checked /><span>Standard</span></label>
+              <label class="choice"><input type="radio" name="print_profile" value="draft" /><span>Draft</span></label>
             </div>
-            <label id="gcode-time-field" class="field hidden">Import G-code for one item
-              <input id="gcode-file" type="file" accept=".gcode,.gco,.gc,text/x-gcode" />
-              <small>Export G-code from your slicer first. The file stays on your device and is used only to read its embedded time estimate.</small>
-              <span id="gcode-time-status" class="import-status" role="status"></span>
-            </label>
-            <div id="known-time-fields" class="inline-fields hidden">
-              <label class="field">Hours per item<input type="number" name="print_hours" min="0" max="1000" value="0" inputmode="numeric" /></label>
-              <label class="field">Minutes per item<input type="number" name="print_minutes" min="0" max="59" value="0" inputmode="numeric" /></label>
-            </div>
-            <p id="unknown-time-note" class="notice hidden">We will show a wider estimate range. Final pricing requires file review.</p>
+            <p id="slice-status" class="import-status" role="status"></p>
           </fieldset>
 
           <fieldset>
@@ -116,7 +112,8 @@
     <footer><a class="wordmark" href="../"><img src="../assets/mucci-products-logo.png" alt="Mucci Products" /></a><p>Designing useful things, one project at a time.</p></footer>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js"></script>
     <script src="./gcode-time.js"></script>
-    <script src="./estimator.js"></script>
+    <script type="module" src="./estimator.js"></script>
   </body>
 </html>

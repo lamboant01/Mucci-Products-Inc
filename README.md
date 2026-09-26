@@ -8,9 +8,25 @@ The customer estimator is available at `/estimator/`. It calculates through a
 narrow Supabase function, submits requests under a short quote code, and uploads
 optional model files to a private Storage bucket. The protected lookup page is
 available at `/admin/estimates/` and reuses the existing administrator account.
-Customers can import slicer-generated G-code to read its embedded print-time
-estimate locally in the browser; the G-code itself is not uploaded. They can
-also enter the time manually or choose an unknown-time estimate requiring review.
+Customers upload an STL, 3MF, OBJ, STEP, or STP model, inspect it in an
+interactive 3D preview, and have it converted to G-code locally in a Web Worker
+with the vendored Three Slicer WASM engine. Detailed (0.18 mm), Standard
+(0.20 mm), and Draft (0.24 mm) profiles affect the calculated time. The fixed
+0.4 mm nozzle, three walls, and
+30% infill are defined in `estimator/slicer-config.js` and are not shown in the
+customer interface. Multi-colour purge allowances are stored centrally in the
+private estimator configuration: 0% for one colour, 10% for two, 18% for three,
+and 25% for four.
+
+The configured build volume is 250 × 250 × 250 mm. Models exceeding any one
+of those dimensions are rejected before slicing.
+
+The viewer and slicer support touch input on phones and tablets. Complex models
+can exceed a mobile browser's available memory; in that case the estimator asks
+the customer to use a desktop computer for that model. Browser slicing depends
+on the pinned Three.js and OCCT browser modules. The AGPL Three Slicer engine,
+its licence, and its third-party notices are kept under
+`estimator/vendor/three-slicer/` so the worker does not depend on a remote path.
 
 Run `supabase/migrations/004_print_estimator.sql` and then
 `supabase/migrations/005_estimator_gcode_and_etsy_contact.sql` after migrations

@@ -1,3 +1,5 @@
+import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
+
 (function () {
   "use strict";
 
@@ -6,12 +8,15 @@
   const message = document.querySelector("#form-message");
   const config = window.MUCCI_CONFIG || {};
   const maxFileBytes = 25 * 1024 * 1024;
+  const maxModelDimensionMm = 250;
   const supportedExtensions = ["stl", "3mf", "obj", "step", "stp"];
   const gcodeTime = window.MucciGcodeTime;
   let calculatedPayload = null;
   let calculatedResult = null;
   let publicOptions = null;
-  let importedPrintTime = null;
+  let loadedModel = null;
+  let modelLoadPromise = null;
+  let slicedPrintTime = null;
 
   if (!config.supabaseUrl || !config.supabaseAnonKey || !window.supabase) {
     form.innerHTML = '<p class="notice">The estimator is temporarily unavailable. Please contact Mucci Products through Etsy.</p>';
@@ -23,6 +28,14 @@
   const range = (minimum, maximum) => Number(minimum) === Number(maximum) ? money(minimum) : `${money(minimum)}–${money(maximum)}`;
   const selected = (name) => form.querySelector(`[name="${name}"]:checked`)?.value || "";
   const escapeHtml = (value) => String(value || "").replace(/[&<>'"]/g, (character) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" })[character]);
+  const isMobileDevice = () => window.matchMedia("(pointer: coarse)").matches || window.innerWidth <= 1024;
+  const withDesktopFallback = (error) => {
+    const detail = error?.message || "This model could not be processed.";
+    return isMobileDevice() && !error?.deviceIndependent
+      ? `${detail} Please use a desktop computer for this model.`
+      : detail;
+  };
+  const validationError = (detail) => Object.assign(new Error(detail), { deviceIndependent:true });
 
   function renderDesignOptions() {
     if (!publicOptions) return;
@@ -35,64 +48,69 @@
 
   function updateConditionalFields() {
     const fileStatus = selected("file_status");
-    document.querySelector("#file-upload-row").classList.toggle("hidden", !["ready", "modify"].includes(fileStatus));
-    const timeMethod = selected("time_method");
-    document.querySelector("#gcode-time-field").classList.toggle("hidden", timeMethod !== "gcode");
-    document.querySelector("#known-time-fields").classList.toggle("hidden", timeMethod !== "manual");
-    document.querySelector("#unknown-time-note").classList.toggle("hidden", timeMethod !== "unknown");
-    document.querySelector("#gcode-file").required = timeMethod === "gcode";
-    form.elements.print_hours.required = timeMethod === "manual";
-    form.elements.print_minutes.required = timeMethod === "manual";
+    const usesModel = ["ready", "modify"].includes(fileStatus);
+    document.querySelector("#file-upload-row").classList.toggle("hidden", !usesModel);
+    document.querySelector("#model-file").required = usesModel;
+    document.querySelector("#model-preview").classList.toggle("hidden", !usesModel || !loadedModel);
   }
 
   function payloadFromForm() {
     const values = Object.fromEntries(new FormData(form));
-    const timeMethod = values.time_method;
-    const imported = timeMethod === "gcode" ? importedPrintTime : null;
+    const usesSlicer = ["ready", "modify"].includes(values.file_status) && slicedPrintTime;
     return {
       p_file_status: values.file_status,
       p_quantity: Number(values.quantity),
-      p_print_hours_per_item: imported ? imported.hours : timeMethod === "manual" ? Number(values.print_hours) : null,
-      p_print_minutes_per_item: imported ? imported.minutes : timeMethod === "manual" ? Number(values.print_minutes) : null,
-      p_size_category: timeMethod === "unknown" ? "not_sure" : null,
+      p_print_hours_per_item: usesSlicer ? slicedPrintTime.hours : null,
+      p_print_minutes_per_item: usesSlicer ? slicedPrintTime.minutes : null,
+      p_size_category: usesSlicer ? null : "not_sure",
       p_colour_count: values.colour_count,
       p_design_level: values.design_level,
       p_assembly_required: values.assembly_required === "true"
     };
   }
 
-  async function readGcodeEstimate(file) {
-    if (!gcodeTime) throw new Error("The G-code time importer did not load. Please enter the time manually.");
-    const chunkBytes = 2 * 1024 * 1024;
-    const first = await file.slice(0, chunkBytes).text();
-    const last = file.size > chunkBytes ? await file.slice(Math.max(chunkBytes, file.size - chunkBytes)).text() : "";
-    const parsed = gcodeTime.parse(`${first}\n${last}`);
-    if (!parsed) throw new Error("No embedded print-time estimate was found. Export the file from your slicer again or enter the time manually.");
-    return { ...gcodeTime.toHoursMinutes(parsed.seconds), source:parsed.source };
+  function validateFile() {
+    if (!["ready", "modify"].includes(selected("file_status"))) return null;
+    const file = document.querySelector("#model-file").files[0];
+    if (!file) throw validationError("Choose a 3D model file so we can prepare the print-time estimate.");
+    const extension = file.name.split(".").pop().toLowerCase();
+    if (!supportedExtensions.includes(extension)) throw validationError("Choose an STL, 3MF, OBJ, STEP, or STP file.");
+    if (file.size > maxFileBytes) throw validationError("The 3D file must be 25 MB or smaller.");
+    return { file, extension };
   }
 
-  async function importGcode(event) {
-    const status = document.querySelector("#gcode-time-status");
-    importedPrintTime = null;
-    status.textContent = "";
+  async function handleModelFile(event) {
+    const preview = document.querySelector("#model-preview");
+    const status = document.querySelector("#model-status");
+    loadedModel = null;
+    slicedPrintTime = null;
+    preview.classList.add("hidden");
     const file = event.target.files[0];
     if (!file) return;
-    status.textContent = "Reading the slicer estimate…";
     try {
-      importedPrintTime = await readGcodeEstimate(file);
-      status.textContent = `Detected ${importedPrintTime.hours} hours ${importedPrintTime.minutes} minutes per item.`;
+      validateFile();
+      preview.classList.remove("hidden");
+      status.textContent = "Preparing the 3D preview…";
+      modelLoadPromise = loadAndPreviewModel(file, document.querySelector("#model-viewer"));
+      loadedModel = await modelLoadPromise;
+      const { x, y, z } = loadedModel.dimensions;
+      if (Math.max(x, y, z) > maxModelDimensionMm) {
+        loadedModel = null;
+        throw validationError("The model must fit within 250 × 250 × 250 mm.");
+      }
+      status.textContent = `Model ready: ${x.toFixed(1)} × ${y.toFixed(1)} × ${z.toFixed(1)} mm.`;
     } catch (error) {
-      status.textContent = error.message;
+      modelLoadPromise = null;
+      status.textContent = withDesktopFallback(error);
     }
   }
 
-  function validateFile() {
-    const file = document.querySelector("#model-file").files[0];
-    if (!file) return null;
-    const extension = file.name.split(".").pop().toLowerCase();
-    if (!supportedExtensions.includes(extension)) throw new Error("Choose an STL, 3MF, OBJ, STEP, or STP file.");
-    if (file.size > maxFileBytes) throw new Error("The 3D file must be 25 MB or smaller.");
-    return { file, extension };
+  function slicingProgress(event) {
+    const status = document.querySelector("#slice-status");
+    if (event?.stage) status.textContent = `${event.stage}…`;
+    else if (event?.slice !== undefined) status.textContent = "Slicing the model…";
+    else if (event?.prepare !== undefined) status.textContent = "Preparing toolpaths…";
+    else if (event?.export !== undefined) status.textContent = "Generating G-code…";
   }
 
   async function calculate(event) {
@@ -100,13 +118,26 @@
     message.textContent = "";
     if (!form.reportValidity()) return;
     try {
-      validateFile();
-      const payload = payloadFromForm();
-      if (selected("time_method") === "gcode" && !importedPrintTime) throw new Error("Import G-code containing a slicer print-time estimate, or choose another time option.");
-      if (payload.p_print_hours_per_item === 0 && payload.p_print_minutes_per_item === 0 && !payload.p_size_category) throw new Error("Enter a print time greater than zero for one item.");
       const button = form.querySelector('button[type="submit"]');
       button.disabled = true;
-      button.textContent = "Calculating…";
+      const fileStatus = selected("file_status");
+      const printProfile = selected("print_profile");
+      if (["ready", "modify"].includes(fileStatus)) {
+        validateFile();
+        button.textContent = "Preparing model…";
+        if (modelLoadPromise) loadedModel = await modelLoadPromise;
+        if (!loadedModel) throw new Error("Wait for the 3D model preview to finish, then try again.");
+        const sliced = await sliceModel(loadedModel, printProfile, slicingProgress);
+        const parsed = gcodeTime?.parse(sliced.gcode);
+        const estimatedSeconds = sliced.seconds || parsed?.seconds;
+        if (!estimatedSeconds) throw new Error("The slicer generated G-code but did not return a usable print-time estimate.");
+        slicedPrintTime = gcodeTime.toHoursMinutes(estimatedSeconds);
+        document.querySelector("#slice-status").textContent = `Estimated print time: ${slicedPrintTime.hours} hours ${slicedPrintTime.minutes} minutes per item.`;
+      } else {
+        slicedPrintTime = null;
+      }
+      const payload = payloadFromForm();
+      button.textContent = "Calculating price…";
       const { data, error } = await client.rpc("calculate_print_estimate", payload);
       if (error) throw error;
       calculatedPayload = payload;
@@ -115,7 +146,9 @@
       button.disabled = false;
       button.textContent = "Recalculate estimate";
     } catch (error) {
-      message.textContent = error.message || "We could not calculate this estimate. Please try again.";
+      message.textContent = ["ready", "modify"].includes(selected("file_status"))
+        ? withDesktopFallback(error)
+        : (error.message || "We could not calculate this estimate. Please try again.");
       const button = form.querySelector('button[type="submit"]');
       button.disabled = false;
       button.textContent = "Calculate estimate";
@@ -139,6 +172,7 @@
       const currentPayload = payloadFromForm();
       if (JSON.stringify(currentPayload) !== JSON.stringify(calculatedPayload)) throw new Error("Your project details changed. Please recalculate before submitting.");
       const values = Object.fromEntries(new FormData(form));
+      const usedSlicer = calculatedPayload.p_size_category === null;
       const selectedFile = validateFile();
       let filePath = null;
       if (selectedFile) {
@@ -149,7 +183,9 @@
       const { data, error } = await client.rpc("submit_print_estimate", {
         ...calculatedPayload,
         p_name: values.name.trim() || null, p_file_path: filePath,
-        p_print_time_source: values.time_method, p_notes: values.notes.trim() || null
+        p_print_time_source: usedSlicer ? "slicer" : "unknown",
+        p_print_profile: usedSlicer ? values.print_profile : null,
+        p_notes: values.notes.trim() || null
       });
       if (error) throw error;
       const submission = Array.isArray(data) ? data[0] : data;
@@ -175,10 +211,10 @@
 
   form.addEventListener("change", (event) => {
     if (event.target.name === "file_status") renderDesignOptions();
-    if (["file_status", "time_method"].includes(event.target.name)) updateConditionalFields();
+    if (event.target.name === "file_status") updateConditionalFields();
     if (calculatedPayload) { calculatedPayload = null; calculatedResult = null; result.classList.add("hidden"); result.innerHTML = ""; }
   });
-  document.querySelector("#gcode-file").addEventListener("change", importGcode);
+  document.querySelector("#model-file").addEventListener("change", handleModelFile);
   form.addEventListener("submit", calculate);
   updateConditionalFields();
   (async function loadPublicOptions() {

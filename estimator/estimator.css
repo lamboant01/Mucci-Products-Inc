@@ -35,6 +35,10 @@ legend span { width:34px; height:34px; display:inline-grid; place-items:center; 
 .field textarea { resize:vertical; }
 .field small, .help { margin:8px 0 0; color:#496479; font-size:.9rem; font-weight:400; line-height:1.5; }
 .import-status { color:#0a557b; font-size:.92rem; font-weight:700; }
+.model-preview { margin-top:20px; padding:12px; border:1px solid var(--line); border-radius:8px; background:#eef8fa; }
+#model-viewer { height:340px; overflow:hidden; border-radius:5px; background:linear-gradient(145deg,#edf8fa,#d8eff2); touch-action:none; }
+.model-preview p { margin:10px 0 3px; font-weight:700; }
+.model-preview small { color:#496479; }
 .emphasis { padding:10px 12px; border-left:4px solid var(--accent); background:var(--pale); }
 .inline-fields { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 .choice-stack { display:grid; gap:9px; }
@@ -61,4 +65,4 @@ button:disabled { cursor:wait; opacity:.55; }
 footer { min-height:150px; display:flex; align-items:center; justify-content:space-between; gap:30px; padding:28px clamp(20px,4vw,68px); border-top:1px solid var(--line); }
 footer p { margin:0; }
 @media (max-width:700px) { .choice-grid-wide { grid-template-columns:1fr; } }
-@media (max-width:520px) { .site-header { height:72px; } .wordmark { width:135px; height:44px; } .wordmark img { transform:translateY(-16px); } .header-link { padding:9px 11px; font-size:.82rem; } .page-shell { padding-top:46px; } fieldset,.result-card { padding:20px 16px; } .inline-fields { grid-template-columns:1fr; gap:0; } .four-up { grid-template-columns:repeat(2,1fr); } .result-actions,.result-actions > * { width:100%; } footer p { display:none; } }
+@media (max-width:520px) { .site-header { height:72px; } .wordmark { width:135px; height:44px; } .wordmark img { transform:translateY(-16px); } .header-link { padding:9px 11px; font-size:.82rem; } .page-shell { padding-top:46px; } fieldset,.result-card { padding:20px 16px; } .inline-fields { grid-template-columns:1fr; gap:0; } .four-up { grid-template-columns:repeat(2,1fr); } #model-viewer { height:270px; } .result-actions,.result-actions > * { width:100%; } footer p { display:none; } }
