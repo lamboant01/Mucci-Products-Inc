@@ -63,6 +63,14 @@ test("server configuration requires a non-ambiguous sixteen-character private ro
   }
 });
 
+test("same-origin validation supports Safari form posts without weakening cross-site checks", () => {
+  const config = { siteUrl:"https://mucciproducts.com" };
+  assert.equal(auth.requestIsSameOrigin({ headers:{ "sec-fetch-site":"same-origin" } }, config), true);
+  assert.equal(auth.requestIsSameOrigin({ headers:{ "sec-fetch-site":"cross-site", host:"mucciproducts.com" } }, config), false);
+  assert.equal(auth.requestIsSameOrigin({ headers:{ host:"mucciproducts.com", "x-forwarded-proto":"https" } }, config), true);
+  assert.equal(auth.requestIsSameOrigin({ headers:{ host:"attacker.example", "x-forwarded-proto":"https" } }, config), false);
+});
+
 test("authorization requires Google as primary provider and the exact configured UUID", () => {
   const config = { adminUserId:ADMIN_ID, adminEmail:"owner@example.test" };
   assert.equal(auth.authorizeUser(googleUser(), config), true);

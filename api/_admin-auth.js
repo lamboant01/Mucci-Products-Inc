@@ -169,7 +169,22 @@ function requestIsSameOrigin(req, config) {
   const origin = String(req.headers?.origin || "");
   if (origin) return origin === expected;
   const referer = String(req.headers?.referer || "");
-  try { return Boolean(referer) && new URL(referer).origin === expected; }
+  try {
+    if (referer) return new URL(referer).origin === expected;
+  } catch { return false; }
+
+  // Safari may omit Origin on a same-origin HTML form POST. The admin pages
+  // deliberately send no Referer, so use browser Fetch Metadata next.
+  const fetchSite = String(req.headers?.["sec-fetch-site"] || "").toLowerCase();
+  if (fetchSite) return fetchSite === "same-origin";
+
+  // Compatibility fallback for older browsers. Cross-site POSTs cannot choose
+  // the request Host header and SameSite=Lax keeps admin cookies off the request.
+  const forwardedHost = String(req.headers?.["x-forwarded-host"] || "").split(",")[0].trim();
+  const host = forwardedHost || String(req.headers?.host || "").trim();
+  const forwardedProtocol = String(req.headers?.["x-forwarded-proto"] || "").split(",")[0].trim();
+  const protocol = forwardedProtocol || "https";
+  try { return Boolean(host) && new URL(`${protocol}://${host}`).origin === expected; }
   catch { return false; }
 }
 
