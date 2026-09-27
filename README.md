@@ -16,7 +16,10 @@ with the vendored Three Slicer WASM engine. Detailed (0.18 mm), Standard
 30% infill are defined in `estimator/slicer-config.js` and are not shown in the
 customer interface. Multi-colour purge allowances are stored centrally in the
 private estimator configuration: 0% for one colour, 10% for two, 18% for three,
-and 25% for four.
+and 25% for four. Slicer filament length is converted to PLA weight using
+1.75 mm filament at 1.24 g/cm³. Pricing adds $2.00 CAD per sliced production
+hour and $1.20 CAD per estimated gram, with the colour purge allowance applied
+to both time and material.
 
 The configured build volume is 250 × 250 × 250 mm. Models exceeding any one
 of those dimensions are rejected before slicing.
@@ -28,9 +31,8 @@ on the pinned Three.js and OCCT browser modules. The AGPL Three Slicer engine,
 its licence, and its third-party notices are kept under
 `estimator/vendor/three-slicer/` so the worker does not depend on a remote path.
 
-Run `supabase/migrations/004_print_estimator.sql` and then
-`supabase/migrations/005_estimator_gcode_and_etsy_contact.sql` after migrations
-001 through 003. All private pricing values and fallback-time assumptions are centralized in
+Run migrations 004 through 006 in order after migrations 001 through 003. All
+private pricing values and fallback-time assumptions are centralized in
 the single-row `print_estimator_config` table created by that migration. Update
 that row in Supabase to change pricing without editing the public website.
 

@@ -6,6 +6,7 @@ import { ThreeMFLoader } from "https://esm.sh/three@0.180.0/examples/jsm/loaders
 import { STLExporter } from "https://esm.sh/three@0.180.0/examples/jsm/exporters/STLExporter.js";
 import { createSlicerClient } from "./vendor/three-slicer/engine/src/client.js";
 import { SLICER_PROFILES } from "./slicer-config.js";
+import { filamentGrams } from "./filament-math.mjs";
 
 let viewer;
 let currentGroup;
@@ -153,8 +154,11 @@ export async function sliceModel(model, profileName, onProgress) {
     if (result?.error) throw new Error(result.error);
     if (result?.warnings?.includes("over_bed_model")) throw new Error("The model does not fit within the print area.");
     if (!result?.gcode || !Number(result?.stats?.time_estimate)) throw new Error("The slicer did not return a usable G-code time estimate.");
+    const filamentLengthMm = Number(result?.stats?.filament_mm);
+    const materialGrams = filamentGrams(filamentLengthMm);
+    if (!materialGrams) throw new Error("The slicer did not return usable filament usage.");
     onProgress?.({ stage:"G-code ready" });
-    return { gcode:result.gcode, seconds:Number(result.stats.time_estimate) };
+    return { gcode:result.gcode, seconds:Number(result.stats.time_estimate), filamentLengthMm, filamentGrams:materialGrams };
   } finally {
     if (timeoutId) window.clearTimeout(timeoutId);
     client.terminate();

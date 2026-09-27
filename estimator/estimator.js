@@ -62,6 +62,7 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
       p_quantity: Number(values.quantity),
       p_print_hours_per_item: usesSlicer ? slicedPrintTime.hours : null,
       p_print_minutes_per_item: usesSlicer ? slicedPrintTime.minutes : null,
+      p_filament_grams_per_item: usesSlicer ? slicedPrintTime.grams : null,
       p_size_category: usesSlicer ? null : "not_sure",
       p_colour_count: values.colour_count,
       p_design_level: values.design_level,
@@ -131,15 +132,15 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
         const parsed = gcodeTime?.parse(sliced.gcode);
         const estimatedSeconds = sliced.seconds || parsed?.seconds;
         if (!estimatedSeconds) throw new Error("The slicer generated G-code but did not return a usable print-time estimate.");
-        slicedPrintTime = gcodeTime.toHoursMinutes(estimatedSeconds);
-        document.querySelector("#slice-status").textContent = `Estimated print time: ${slicedPrintTime.hours} hours ${slicedPrintTime.minutes} minutes per item.`;
+        slicedPrintTime = { ...gcodeTime.toHoursMinutes(estimatedSeconds), grams:sliced.filamentGrams };
+        document.querySelector("#slice-status").textContent = `Estimated print time: ${slicedPrintTime.hours} hours ${slicedPrintTime.minutes} minutes. Estimated filament: ${slicedPrintTime.grams.toFixed(1)} g per item.`;
       } else {
         slicedPrintTime = null;
       }
       const payload = payloadFromForm();
       button.textContent = "Calculating price…";
       const { data, error } = await client.rpc("calculate_print_estimate", payload);
-      if (error) throw error;
+      if (error) throw validationError(error.message || "The pricing service could not calculate this estimate.");
       calculatedPayload = payload;
       calculatedResult = Array.isArray(data) ? data[0] : data;
       renderEstimate(calculatedResult);
@@ -157,7 +158,8 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
 
   function renderEstimate(estimate) {
     result.classList.remove("hidden");
-    result.innerHTML = `<p class="eyebrow">Your estimate is ready</p><h2>Estimated Project Price</h2><p class="price">${range(estimate.estimated_price_min, estimate.estimated_price_max)} CAD</p><div class="result-meta"><span><strong>Quantity:</strong> ${escapeHtml(calculatedPayload.p_quantity)}</span><span><strong>Approximate price per item:</strong> ${range(estimate.price_per_item_min, estimate.price_per_item_max)} CAD</span></div>${estimate.requires_manual_review ? '<p class="notice"><strong>File review required.</strong> This project needs manual confirmation before final pricing.</p>' : ""}<p>Estimate only. Final pricing is confirmed after your project and files are reviewed.</p><p>Submitting an estimate does not create an order or charge you. If you contacted us through Etsy, your final order and payment will be completed through Etsy.</p><div class="result-actions"><button id="submit-estimate" class="primary-button" type="button">SUBMIT ESTIMATE</button></div><p id="submit-message" role="alert"></p>`;
+    const material = estimate.material_grams_per_item == null ? "File review" : `${Number(estimate.material_grams_per_item).toFixed(1)} g per item`;
+    result.innerHTML = `<p class="eyebrow">Your estimate is ready</p><h2>Estimated Project Price</h2><p class="price">${range(estimate.estimated_price_min, estimate.estimated_price_max)} CAD</p><div class="result-meta"><span><strong>Quantity:</strong> ${escapeHtml(calculatedPayload.p_quantity)}</span><span><strong>Approximate price per item:</strong> ${range(estimate.price_per_item_min, estimate.price_per_item_max)} CAD</span><span><strong>Estimated filament:</strong> ${escapeHtml(material)}</span></div>${estimate.requires_manual_review ? '<p class="notice"><strong>File review required.</strong> This project needs manual confirmation before final pricing.</p>' : ""}<p>Estimate only. Final pricing is confirmed after your project and files are reviewed.</p><p>Submitting an estimate does not create an order or charge you. If you contacted us through Etsy, your final order and payment will be completed through Etsy.</p><div class="result-actions"><button id="submit-estimate" class="primary-button" type="button">SUBMIT ESTIMATE</button></div><p id="submit-message" role="alert"></p>`;
     document.querySelector("#submit-estimate").addEventListener("click", submitEstimate);
     result.scrollIntoView({ behavior:"smooth", block:"start" });
   }
