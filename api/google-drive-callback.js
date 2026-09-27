@@ -22,7 +22,7 @@ function sameState(received, expected) {
 }
 
 function destination(config, status) {
-  return `${config.siteUrl}/${config.routeSlug}/estimates?drive=${status}`;
+  return `${config.siteUrl}/admin/estimates?drive=${status}`;
 }
 
 module.exports = async function handler(req, res) {

@@ -30,20 +30,22 @@ module.exports = async function handler(req, res) {
   try {
     const config = auth.configuration();
     const values = auth.requestQuery(req);
-    const slug = String(values.slug || "");
-    if (!auth.routeMatches(slug, config)) return auth.notFound(res);
     const requestedSection = auth.section(values.section);
     const result = await auth.authenticateAdmin(req, res, config);
-    if (result.status === "unauthorized") return auth.notFound(res);
+    if (result.status === "unauthorized") {
+      console.warn("Admin authentication failed:", result.reason);
+      return auth.notFound(res);
+    }
     if (result.status === "unauthenticated") {
-      auth.appendCookies(res, [auth.cookie(auth.RETURN_COOKIE, `${config.routeSlug}/${requestedSection}`, 600, "/api")]);
+      auth.appendCookies(res, [auth.cookie(auth.LOGIN_COOKIE, "1", 600, "/api/admin-auth-start")]);
       return res.status(200).send(loginPage());
     }
     const scripts = requestedSection === "cards"
       ? ["/config.js", "/card-core.js", "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js", "/assets/management-cards.js"]
       : requestedSection === "estimates" ? ["/config.js", "/assets/management-estimates.js"] : [];
-    return res.status(200).send(page({ title:requestedSection === "cards" ? "Card Dashboard" : requestedSection === "security" ? "Security" : "Print Estimates", body:adminBody(requestedSection, result.user, result.bootstrap), scripts, authenticated:true, basePath:`/${slug}` }));
-  } catch {
+    return res.status(200).send(page({ title:requestedSection === "cards" ? "Card Dashboard" : requestedSection === "security" ? "Security" : "Print Estimates", body:adminBody(requestedSection, result.user, result.bootstrap), scripts, authenticated:true, basePath:"/admin" }));
+  } catch (error) {
+    console.warn("Admin authentication failed:", error?.statusCode === 503 ? "configuration_invalid" : "admin_page_failed");
     return auth.notFound(res);
   }
 };

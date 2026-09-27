@@ -20,7 +20,6 @@ test("creates an offline Drive authorization URL only for the administrator", { 
     SUPABASE_ANON_KEY:"anon-test",
     SUPABASE_SERVICE_ROLE_KEY:"service-role-test",
     PUBLIC_SITE_URL:"https://mucciproducts.com",
-    ADMIN_ROUTE_SLUG:"AbcdefghJKMNPQrs",
     ADMIN_USER_ID:"123e4567-e89b-42d3-a456-426614174000",
     GOOGLE_DRIVE_CLIENT_ID:"client.apps.googleusercontent.com",
     GOOGLE_DRIVE_CLIENT_SECRET:"client-secret",

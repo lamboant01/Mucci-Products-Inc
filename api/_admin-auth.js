@@ -1,11 +1,9 @@
 "use strict";
 
-const crypto = require("node:crypto");
-
 const ACCESS_COOKIE = "mucci_sb_admin_access";
 const REFRESH_COOKIE = "mucci_sb_admin_refresh";
 const PKCE_COOKIE = "mucci_admin_pkce";
-const RETURN_COOKIE = "mucci_admin_return";
+const LOGIN_COOKIE = "mucci_admin_login";
 const ALLOWED_SECTIONS = new Set(["estimates", "cards", "security"]);
 
 function configuration() {
@@ -14,12 +12,10 @@ function configuration() {
     anonKey:process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
     serviceKey:process.env.SUPABASE_SERVICE_ROLE_KEY,
     siteUrl:String(process.env.PUBLIC_SITE_URL || "https://mucciproducts.com").replace(/\/$/, ""),
-    routeSlug:String(process.env.ADMIN_ROUTE_SLUG || ""),
     adminEmail:String(process.env.ADMIN_EMAIL || "").trim().toLowerCase(),
     adminUserId:String(process.env.ADMIN_USER_ID || "").trim().toLowerCase()
   };
   if (!values.supabaseUrl || !values.anonKey || !values.serviceKey) throw configurationError("Supabase server configuration is missing.");
-  if (!/^[A-Za-z0-9]{16}$/.test(values.routeSlug) || /[O0I1l]/.test(values.routeSlug)) throw configurationError("ADMIN_ROUTE_SLUG is invalid.");
   if (values.adminUserId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(values.adminUserId)) throw configurationError("ADMIN_USER_ID is invalid.");
   if (!values.adminUserId && !values.adminEmail) throw configurationError("ADMIN_EMAIL is required until ADMIN_USER_ID is configured.");
   return values;
@@ -67,7 +63,7 @@ function clearSession(res) {
 }
 
 function clearOAuthCookies(res) {
-  appendCookies(res, [cookie(PKCE_COOKIE, "", 0, "/api/admin-auth-callback"), cookie(RETURN_COOKIE, "", 0, "/api")]);
+  appendCookies(res, [cookie(PKCE_COOKIE, "", 0, "/api/admin-auth-callback"), cookie(LOGIN_COOKIE, "", 0, "/api/admin-auth-start")]);
 }
 
 function setSession(res, session) {
@@ -76,16 +72,6 @@ function setSession(res, session) {
     cookie(ACCESS_COOKIE, String(session.access_token), accessMaxAge),
     cookie(REFRESH_COOKIE, String(session.refresh_token), 60 * 60 * 24 * 30)
   ]);
-}
-
-function sameValue(received, expected) {
-  const left = Buffer.from(String(received || ""));
-  const right = Buffer.from(String(expected || ""));
-  return left.length > 0 && left.length === right.length && crypto.timingSafeEqual(left, right);
-}
-
-function routeMatches(slug, config) {
-  return sameValue(slug, config.routeSlug);
 }
 
 function providerIsGoogle(user) {
@@ -103,6 +89,13 @@ function authorizeUser(user, config) {
   if (!user?.id || !providerIsGoogle(user)) return false;
   if (config.adminUserId) return String(user.id).toLowerCase() === config.adminUserId;
   return emailIsVerified(user) && String(user.email || "").trim().toLowerCase() === config.adminEmail;
+}
+
+function authorizationFailureReason(user, config) {
+  if (!user?.id || !providerIsGoogle(user)) return "google_provider_invalid";
+  if (config.adminUserId && String(user.id).toLowerCase() !== config.adminUserId) return "admin_user_id_mismatch";
+  if (!config.adminUserId && (!emailIsVerified(user) || String(user.email || "").trim().toLowerCase() !== config.adminEmail)) return "admin_email_mismatch";
+  return "authorization_failed";
 }
 
 async function fetchUser(config, accessToken) {
@@ -145,7 +138,7 @@ async function authenticateAdmin(req, res, suppliedConfig) {
   if (!user) return { status:"unauthenticated", config };
   if (!authorizeUser(user, config)) {
     clearSession(res);
-    return { status:"unauthorized", config, user };
+    return { status:"unauthorized", config, user, reason:authorizationFailureReason(user, config) };
   }
   return { status:"authorized", config, user, accessToken, refreshToken, bootstrap:!config.adminUserId };
 }
@@ -167,7 +160,7 @@ function requestBody(req) {
 function requestIsSameOrigin(req, config) {
   const expected = new URL(config.siteUrl).origin;
   const origin = String(req.headers?.origin || "");
-  if (origin) return origin === expected;
+  if (origin && origin !== "null") return origin === expected;
   const referer = String(req.headers?.referer || "");
   try {
     if (referer) return new URL(referer).origin === expected;
@@ -204,9 +197,9 @@ function apiNotFound(res) {
 }
 
 module.exports = {
-  ACCESS_COOKIE, REFRESH_COOKIE, PKCE_COOKIE, RETURN_COOKIE,
-  ALLOWED_SECTIONS, appendCookies, authenticateAdmin, authorizeUser, clearOAuthCookies,
+  ACCESS_COOKIE, REFRESH_COOKIE, PKCE_COOKIE, LOGIN_COOKIE,
+  ALLOWED_SECTIONS, appendCookies, authenticateAdmin, authorizationFailureReason, authorizeUser, clearOAuthCookies,
   clearSession, configuration, cookie, cookieMap, emailIsVerified, notFound,
-  apiNotFound, providerIsGoogle, requestBody, requestQuery, routeMatches,
+  apiNotFound, providerIsGoogle, requestBody, requestQuery,
   requestIsSameOrigin, section, securityHeaders, setSession
 };
