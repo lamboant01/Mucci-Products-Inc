@@ -185,12 +185,22 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
       const { data, error } = await client.rpc("submit_print_estimate", {
         ...calculatedPayload,
         p_name: values.name.trim() || null, p_file_path: filePath,
+        p_original_file_name: selectedFile?.file.name || null,
         p_print_time_source: usedSlicer ? "slicer" : "unknown",
         p_print_profile: usedSlicer ? values.print_profile : null,
         p_notes: values.notes.trim() || null
       });
       if (error) throw error;
       const submission = Array.isArray(data) ? data[0] : data;
+      try {
+        const notification = await fetch("/api/estimate-notification", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body:JSON.stringify({ quoteCode:submission.quote_code, notificationToken:submission.notification_token }),
+          signal:AbortSignal.timeout(12000)
+        });
+        if (!notification.ok) console.error("The owner notification could not be sent.");
+      } catch (_) { console.error("The owner notification could not be sent."); }
       renderSuccess(submission);
     } catch (error) {
       submitMessage.textContent = error.message || "We could not submit your estimate. Please try again.";

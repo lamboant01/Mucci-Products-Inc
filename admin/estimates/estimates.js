@@ -7,6 +7,10 @@
   const money = (value) => new Intl.NumberFormat("en-CA", { style:"currency", currency:"CAD" }).format(Number(value));
   const price = (estimate) => Number(estimate.estimated_price) === Number(estimate.estimated_price_max) ? money(estimate.estimated_price) : `${money(estimate.estimated_price)}–${money(estimate.estimated_price_max)}`;
   const label = (value) => String(value || "None").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  const quoteFromUrl = () => {
+    const value = new URLSearchParams(window.location.search).get("quote")?.trim().toUpperCase() || "";
+    return /^MP-[A-HJ-NP-Z2-9]{5}$/.test(value) ? value : "";
+  };
 
   if (!config.supabaseUrl || !config.supabaseAnonKey || !window.supabase) { root.innerHTML = '<div class="dashboard-notice">Supabase setup is required.</div>'; return; }
   const client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
@@ -15,7 +19,7 @@
     const { data:{ session } } = await client.auth.getSession();
     if (!session) return renderLogin();
     if (String(session.user.email || "").toLowerCase() !== allowedAdminEmail) { await client.auth.signOut(); return renderLogin("This account is not authorized."); }
-    await loadEstimates();
+    await loadEstimates(quoteFromUrl());
   }
 
   function renderLogin(initialMessage) {
@@ -27,11 +31,15 @@
       if (email !== allowedAdminEmail) { status.textContent = "The email or password is incorrect."; button.disabled = false; return; }
       const { error } = await client.auth.signInWithPassword({ email, password:values.password });
       if (error) { status.textContent = "The email or password is incorrect."; button.disabled = false; return; }
-      await loadEstimates();
+      await loadEstimates(quoteFromUrl());
     });
   }
 
   async function loadEstimates(query = "") {
+    const url = new URL(window.location.href);
+    if (query) url.searchParams.set("quote", query.trim().toUpperCase());
+    else url.searchParams.delete("quote");
+    window.history.replaceState({}, "", url);
     root.innerHTML = '<p role="status">Loading estimates…</p>';
     let request = client.from("print_estimates").select("*").order("created_at", { ascending:false }).limit(100);
     if (query) request = request.eq("quote_code", query.trim().toUpperCase());
@@ -54,7 +62,7 @@
     const printTime = estimate.size_category ? `${label(estimate.size_category)} size estimate` : `${estimate.print_hours_per_item || 0}h ${estimate.print_minutes_per_item || 0}m per item`;
     const material = estimate.filament_grams_per_item == null ? "Not available" : `${Number(estimate.filament_grams_per_item).toFixed(1)} g per item`;
     const materialTotal = estimate.estimated_material_grams == null ? "Not available" : `${Number(estimate.estimated_material_grams).toFixed(1)} g including purge`;
-    return `<article class="estimate-card"><header><div><h2>${escapeHtml(estimate.quote_code)}</h2><small>${new Date(estimate.created_at).toLocaleString("en-CA")}</small></div><span class="status-badge">${escapeHtml(estimate.status)}</span></header>${estimate.requires_manual_review ? '<p class="manual-flag">Manual review required</p>' : ""}<dl class="estimate-grid"><div><dt>Name</dt><dd>${escapeHtml(estimate.name || "Not provided")}</dd></div><div><dt>Estimated price</dt><dd>${price(estimate)} CAD</dd></div><div><dt>Quantity</dt><dd>${escapeHtml(estimate.quantity)}</dd></div><div><dt>Print time</dt><dd>${escapeHtml(printTime)}</dd></div><div><dt>Filament</dt><dd>${escapeHtml(material)}</dd></div><div><dt>Material total</dt><dd>${escapeHtml(materialTotal)}</dd></div><div><dt>Time source</dt><dd>${label(estimate.print_time_source || (estimate.size_category ? "unknown" : "manual"))}</dd></div><div><dt>Print profile</dt><dd>${label(estimate.print_profile)}</dd></div><div><dt>Colours</dt><dd>${escapeHtml(estimate.colour_count)}</dd></div><div><dt>Purge allowance</dt><dd>${escapeHtml(estimate.purge_waste_percent || 0)}%</dd></div><div><dt>File status</dt><dd>${label(estimate.file_status)}</dd></div><div><dt>Design</dt><dd>${label(estimate.design_level)}</dd></div><div><dt>Assembly</dt><dd>${estimate.assembly_required ? "Yes" : "No"}</dd></div></dl><p class="notes"><strong>Customer notes</strong><br>${escapeHtml(estimate.notes || "No notes provided.")}</p><div class="card-actions"><button class="button button-secondary" type="button" data-copy="${escapeHtml(estimate.quote_code)}">Copy Quote Code</button>${estimate.file_path ? `<button class="button button-secondary" type="button" data-file="${escapeHtml(estimate.file_path)}">Open Uploaded File</button>` : ""}${estimate.status === "pending" ? `<button class="button button-primary" type="button" data-id="${estimate.id}" data-status="reviewed">Mark Reviewed</button>` : ""}${estimate.status !== "completed" ? `<button class="button button-primary" type="button" data-id="${estimate.id}" data-status="completed">Mark Completed</button>` : ""}</div></article>`;
+    return `<article class="estimate-card"><header><div><h2>${escapeHtml(estimate.quote_code)}</h2><small>${new Date(estimate.created_at).toLocaleString("en-CA")}</small></div><span class="status-badge">${escapeHtml(estimate.status)}</span></header>${estimate.requires_manual_review ? '<p class="manual-flag">Manual review required</p>' : ""}<dl class="estimate-grid"><div><dt>Name</dt><dd>${escapeHtml(estimate.name || "Not provided")}</dd></div><div><dt>Estimated price</dt><dd>${price(estimate)} CAD</dd></div><div><dt>Model file</dt><dd>${escapeHtml(estimate.original_file_name || (estimate.file_path ? "Uploaded model" : "Not provided"))}</dd></div><div><dt>Quantity</dt><dd>${escapeHtml(estimate.quantity)}</dd></div><div><dt>Print time</dt><dd>${escapeHtml(printTime)}</dd></div><div><dt>Filament</dt><dd>${escapeHtml(material)}</dd></div><div><dt>Material total</dt><dd>${escapeHtml(materialTotal)}</dd></div><div><dt>Time source</dt><dd>${label(estimate.print_time_source || (estimate.size_category ? "unknown" : "manual"))}</dd></div><div><dt>Print profile</dt><dd>${label(estimate.print_profile)}</dd></div><div><dt>Colours</dt><dd>${escapeHtml(estimate.colour_count)}</dd></div><div><dt>Purge allowance</dt><dd>${escapeHtml(estimate.purge_waste_percent || 0)}%</dd></div><div><dt>File status</dt><dd>${label(estimate.file_status)}</dd></div><div><dt>Design</dt><dd>${label(estimate.design_level)}</dd></div><div><dt>Assembly</dt><dd>${estimate.assembly_required ? "Yes" : "No"}</dd></div></dl><p class="notes"><strong>Customer notes</strong><br>${escapeHtml(estimate.notes || "No notes provided.")}</p><div class="card-actions"><button class="button button-secondary" type="button" data-copy="${escapeHtml(estimate.quote_code)}">Copy Quote Code</button>${estimate.file_path ? `<button class="button button-secondary" type="button" data-file="${escapeHtml(estimate.file_path)}">Open Uploaded File</button>` : ""}${estimate.status === "pending" ? `<button class="button button-primary" type="button" data-id="${estimate.id}" data-status="reviewed">Mark Reviewed</button>` : ""}${estimate.status !== "completed" ? `<button class="button button-primary" type="button" data-id="${estimate.id}" data-status="completed">Mark Completed</button>` : ""}</div></article>`;
   }
 
   async function updateStatus(id, status, button) {

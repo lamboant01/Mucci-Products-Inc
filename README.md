@@ -31,10 +31,19 @@ on the pinned Three.js and OCCT browser modules. The AGPL Three Slicer engine,
 its licence, and its third-party notices are kept under
 `estimator/vendor/three-slicer/` so the worker does not depend on a remote path.
 
-Run migrations 004 through 006 in order after migrations 001 through 003. All
+Run migrations 004 through 007 in order after migrations 001 through 003. All
 private pricing values and fallback-time assumptions are centralized in
 the single-row `print_estimator_config` table created by that migration. Update
 that row in Supabase to change pricing without editing the public website.
+
+Submitted estimates can send a one-time owner notification through the Vercel
+function at `/api/estimate-notification`. Configure `SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, and `ESTIMATE_EMAIL_FROM` as
+server-only Vercel environment variables. `ESTIMATE_EMAIL_FROM` must use a
+sender domain verified by Resend. `ESTIMATE_EMAIL_TO` is optional and defaults
+to `anthony@mucciproducts.com`. The email includes a protected portal link that
+opens the matching quote after admin sign-in; the model itself remains private
+and is opened from the portal with the existing short-lived signed URL.
 
 The Etsy destination is set once as `etsyUrl` in `config.js`. No additional
 environment variables are required beyond the existing public Supabase URL and
