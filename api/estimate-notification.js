@@ -19,10 +19,9 @@ function configuration() {
     serviceKey:process.env.SUPABASE_SERVICE_ROLE_KEY,
     resendKey:process.env.RESEND_API_KEY,
     from:process.env.ESTIMATE_EMAIL_FROM || DEFAULT_FROM_EMAIL,
-    to:process.env.ESTIMATE_EMAIL_TO || OWNER_EMAIL,
-    siteUrl:String(process.env.PUBLIC_SITE_URL || "https://mucciproducts.com").replace(/\/$/, "")
+    to:process.env.ESTIMATE_EMAIL_TO || OWNER_EMAIL
   };
-  const missing = Object.entries(values).filter(([key, value]) => !value && key !== "siteUrl").map(([key]) => key);
+  const missing = Object.entries(values).filter(([, value]) => !value).map(([key]) => key);
   if (missing.length) {
     const error = new Error(`Estimate email is not configured: ${missing.join(", ")}.`);
     error.statusCode = 503;
@@ -70,7 +69,7 @@ async function markSent(config, quoteCode) {
 }
 
 async function sendEmail(config, estimate) {
-  const email = buildEstimateEmail(estimate, config.siteUrl);
+  const email = buildEstimateEmail(estimate);
   const response = await fetch("https://api.resend.com/emails", {
     method:"POST",
     headers:{

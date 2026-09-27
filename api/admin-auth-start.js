@@ -15,7 +15,7 @@ module.exports = async function handler(req, res) {
     if (!auth.requestIsSameOrigin(req, config)) return auth.notFound(res);
     const cookies = auth.cookieMap(req);
     const returnValue = String(cookies[auth.RETURN_COOKIE] || "");
-    const [slug, requestedSection] = returnValue.split("/");
+    const [slug] = returnValue.split("/");
     if (!auth.routeMatches(slug, config)) return auth.notFound(res);
 
     const verifier = base64url(crypto.randomBytes(48));

@@ -23,8 +23,8 @@ function profileValues(body) {
   return result;
 }
 
-async function listCards(config, userId) {
-  const profiles = await db.select(config, "profiles", { owner_user_id:`eq.${userId}`, select:"*", order:"created_at.asc" });
+async function listCards(config) {
+  const profiles = await db.select(config, "profiles", { select:"*", order:"created_at.asc" });
   if (!profiles.length) return { profiles:[], cards:[] };
   const ids = profiles.map((profile) => profile.id).join(",");
   const cards = await db.select(config, "physical_cards", { profile_id:`in.(${ids})`, select:"id,profile_id,public_token,card_label,is_active,created_at", order:"created_at.asc" });
@@ -33,7 +33,7 @@ async function listCards(config, userId) {
 
 async function handleAction(config, user, body) {
   switch (body.action) {
-    case "list": return listCards(config, user.id);
+    case "list": return listCards(config);
     case "create": {
       const values = profileValues(body.profile || {});
       const created = await db.rpc(config, "server_create_digital_card", {
@@ -46,7 +46,7 @@ async function handleAction(config, user, body) {
       const profileId = uuid(body.profileId);
       if (!profileId) throw new Error("Invalid profile.");
       const values = profileValues(body.profile || {});
-      const updated = await db.patch(config, "profiles", { id:`eq.${profileId}`, owner_user_id:`eq.${user.id}` }, values);
+      const updated = await db.patch(config, "profiles", { id:`eq.${profileId}` }, values);
       if (!updated?.length) throw new Error("Profile not found.");
       return { profile:updated[0] };
     }

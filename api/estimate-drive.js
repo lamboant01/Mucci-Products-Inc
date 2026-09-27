@@ -58,6 +58,25 @@ async function markMirrored(config, quoteCode, saved) {
   if (!response.ok) throw new Error(`Drive status update failed with status ${response.status}.`);
 }
 
+async function mirrorEstimate(supabase, estimate) {
+  const driveConfig = drive.configuration(await connection.storedRefreshToken(supabase));
+  if (!estimate || !estimate.file_path) return { accepted:true };
+  if (estimate.drive_file_id) {
+    if (/^https:\/\/drive\.google\.com\/drive\/folders\//.test(estimate.drive_web_view_link || "")) return { accepted:true };
+    const organized = await drive.organizeModel(driveConfig, { quoteCode:estimate.quote_code, fileId:estimate.drive_file_id });
+    await markMirrored(supabase, estimate.quote_code, organized);
+    return { mirrored:true, organized:true };
+  }
+  const bytes = await downloadModel(supabase, estimate.file_path);
+  const saved = await drive.uploadModel(driveConfig, {
+    bytes,
+    quoteCode:estimate.quote_code,
+    originalFileName:estimate.original_file_name
+  });
+  await markMirrored(supabase, estimate.quote_code, saved);
+  return { mirrored:true };
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "private, no-store");
   if (req.method !== "POST") return res.status(405).json({ error:"Method not allowed." });
@@ -67,30 +86,13 @@ module.exports = async function handler(req, res) {
     const notificationToken = String(body.notificationToken || "").toLowerCase();
     if (!quoteCode || !UUID_PATTERN.test(notificationToken)) return res.status(400).json({ error:"Invalid Drive mirror request." });
     const supabase = connection.supabaseConfiguration();
-    const driveConfig = drive.configuration(await connection.storedRefreshToken(supabase));
     const estimate = await findEstimate(supabase, quoteCode, notificationToken);
-    if (!estimate || !estimate.file_path) return res.status(202).json({ accepted:true });
-    if (estimate.drive_file_id) {
-      if (/^https:\/\/drive\.google\.com\/drive\/folders\//.test(estimate.drive_web_view_link || "")) {
-        return res.status(202).json({ accepted:true });
-      }
-      const organized = await drive.organizeModel(driveConfig, {
-        quoteCode:estimate.quote_code,
-        fileId:estimate.drive_file_id
-      });
-      await markMirrored(supabase, quoteCode, organized);
-      return res.status(200).json({ mirrored:true, organized:true });
-    }
-    const bytes = await downloadModel(supabase, estimate.file_path);
-    const saved = await drive.uploadModel(driveConfig, {
-      bytes,
-      quoteCode:estimate.quote_code,
-      originalFileName:estimate.original_file_name
-    });
-    await markMirrored(supabase, quoteCode, saved);
-    return res.status(200).json({ mirrored:true });
+    const result = await mirrorEstimate(supabase, estimate);
+    return res.status(result.accepted ? 202 : 200).json(result);
   } catch (error) {
     console.error("Estimate Drive mirror failed:", error && error.message);
     return res.status(error.statusCode || 502).json({ error:"The estimate was saved, but its Drive copy could not be created." });
   }
 };
+
+module.exports.mirrorEstimate = mirrorEstimate;

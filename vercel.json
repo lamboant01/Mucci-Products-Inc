@@ -4,10 +4,15 @@
       "maxDuration": 60
     }
   },
-  "rewrites": [
-    {
-      "source": "/card/:publicToken",
-      "destination": "/card.html?token=:publicToken"
-    }
+  "routes": [
+    { "src": "/assets/management.css", "dest": "/admin/estimates/estimates.css" },
+    { "src": "/assets/management-estimates.js", "dest": "/admin/estimates/estimates.js" },
+    { "src": "/assets/management-cards.js", "dest": "/card-dashboard/dashboard.js" },
+    { "src": "/admin(?:/.*)?", "dest": "/api/not-found" },
+    { "src": "/card-dashboard(?:/.*)?", "dest": "/api/not-found" },
+    { "src": "/card/([^/]+)", "dest": "/card.html?token=$1" },
+    { "handle": "filesystem" },
+    { "src": "/([A-Za-z0-9]{16})/?", "dest": "/api/admin-page?slug=$1&section=estimates" },
+    { "src": "/([A-Za-z0-9]{16})/(estimates|cards|security)/?", "dest": "/api/admin-page?slug=$1&section=$2" }
   ]
 }

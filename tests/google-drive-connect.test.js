@@ -17,16 +17,24 @@ test("creates an offline Drive authorization URL only for the administrator", { 
   context.after(() => { global.fetch = originalFetch; process.env = originalEnvironment; });
   Object.assign(process.env, {
     SUPABASE_URL:"https://project.supabase.co",
+    SUPABASE_ANON_KEY:"anon-test",
     SUPABASE_SERVICE_ROLE_KEY:"service-role-test",
+    PUBLIC_SITE_URL:"https://mucciproducts.com",
+    ADMIN_ROUTE_SLUG:"AbcdefghJKMNPQrs",
+    ADMIN_USER_ID:"123e4567-e89b-42d3-a456-426614174000",
     GOOGLE_DRIVE_CLIENT_ID:"client.apps.googleusercontent.com",
     GOOGLE_DRIVE_CLIENT_SECRET:"client-secret",
     GOOGLE_DRIVE_REDIRECT_URI:"https://mucciproducts.com/api/google-drive-callback"
   });
-  global.fetch = async () => new Response(JSON.stringify({ email:"anthony@mucciproducts.com" }), {
+  global.fetch = async () => new Response(JSON.stringify({
+    id:"123e4567-e89b-42d3-a456-426614174000",
+    app_metadata:{ provider:"google", providers:["google"] },
+    identities:[{ provider:"google" }]
+  }), {
     status:200, headers:{ "Content-Type":"application/json" }
   });
   const res = responseRecorder();
-  await handler({ method:"POST", headers:{ authorization:"Bearer admin-session" } }, res);
+  await handler({ method:"POST", headers:{ origin:"https://mucciproducts.com", cookie:"mucci_sb_admin_access=admin-session" } }, res);
   assert.equal(res.statusCode, 200);
   const authorization = new URL(res.body.authorizationUrl);
   assert.equal(authorization.hostname, "accounts.google.com");

@@ -4,21 +4,28 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const read = (name) => fs.readFileSync(path.join(__dirname, "..", "admin", "estimates", name), "utf8");
+const readApi = (name) => fs.readFileSync(path.join(__dirname, "..", "api", name), "utf8");
 
-test("admin estimate route loads the listing configuration before the dashboard", () => {
-  const html = read("index.html");
-  assert.match(html, /etsy-listing-config\.js[\s\S]*etsy-listing\.js[\s\S]*estimates\.js/i);
-  assert.match(html, /noindex,nofollow,noarchive/i);
+test("server-rendered owner area loads only the protected estimate client", () => {
+  const page = readApi("admin-page.js");
+  assert.match(page, /noindex,nofollow,noarchive,nosnippet/i);
+  assert.match(page, /management-estimates\.js/i);
+  assert.doesNotMatch(page, /signInWithPassword|supabase-js/i);
 });
 
 test("admin workflow uses protected exact-match RPCs and private signed file access", () => {
   const source = read("estimates.js");
-  assert.match(source, /client\.rpc\("admin_find_print_estimate"/);
+  const server = readApi("admin-estimates.js");
+  assert.match(source, /fetch\("\/api\/admin-estimates"/);
   assert.match(source, /trim\(\)\.toUpperCase\(\)/);
   assert.doesNotMatch(source, /maxlength="8"/);
-  assert.match(source, /client\.rpc\("admin_prepare_etsy_listing"/);
-  assert.match(source, /storage\.from\("print-estimate-files"\)\.createSignedUrl\(path, 60\)/);
+  assert.match(server, /"admin_find_print_estimate"/);
+  assert.match(server, /"admin_prepare_etsy_listing"/);
+  assert.match(server, /signedStorageUrl\(config, "print-estimate-files"/);
+  assert.match(server, /authenticateAdmin/);
+  assert.match(server, /requestIsSameOrigin/);
   assert.doesNotMatch(source, /\.from\("print_estimates"\)\.select/);
+  assert.doesNotMatch(source, /supabase|signInWithPassword|service_role/i);
 });
 
 test("admin workflow includes review safety, copy actions, filters, and manual Etsy handoff", () => {
@@ -28,7 +35,7 @@ test("admin workflow includes review safety, copy actions, filters, and manual E
     "Copy Quote Code", "Copy Customer Email", "Copy Description", "Copy Etsy Reply",
     "Copy All Etsy Details", "Open Etsy Messages", "Mark Reviewed", "Mark Completed", "Decline"
   ]) assert.match(source, new RegExp(phrase));
-  assert.match(source, /\["all", \.\.\.adminConfig\.statuses, "manual_review"\]/);
+  assert.match(source, /\["all", \.\.\.statuses, "manual_review"\]/);
   assert.doesNotMatch(source, /playwright|selenium|etsy.*cookie|etsy.*password/i);
 });
 

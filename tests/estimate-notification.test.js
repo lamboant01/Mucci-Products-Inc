@@ -56,8 +56,8 @@ test("sends one protected estimate summary to the owner", { concurrency:false },
   const emailCall = calls.find((call) => call.url === "https://api.resend.com/emails");
   const payload = JSON.parse(emailCall.init.body);
   assert.equal(payload.from, "Mucci Products <order@mucciproducts.com>");
-  assert.deepEqual(payload.to, ["anthony@mucciproducts.com"]);
-  assert.match(payload.text, /admin\/estimates\/\?quote=MP-A42K7/);
+  assert.deepEqual(payload.to, ["order@mucciproducts.com"]);
+  assert.doesNotMatch(payload.text, /admin\/estimates|card-dashboard|https?:\/\//i);
   assert.match(payload.text, /bracket\.stl/);
   assert.equal(payload.attachments, undefined);
   assert.equal(emailCall.init.headers["Idempotency-Key"], "estimate-submitted/MP-A42K7");

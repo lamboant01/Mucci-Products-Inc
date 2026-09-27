@@ -1,4 +1,5 @@
--- Restrict the card administration tables and setup RPC to one administrator.
+-- Historical card-administration policies. The final server-only policy is
+-- applied by migration 015; no administrator identity is stored in SQL.
 create or replace function public.is_mucci_card_admin()
 returns boolean
 language sql
@@ -6,7 +7,7 @@ stable
 security invoker
 set search_path = ''
 as $$
-  select lower(coalesce(auth.jwt() ->> 'email', '')) = 'anthony@mucciproducts.com';
+  select coalesce(auth.role(), '') = 'service_role';
 $$;
 
 revoke all on function public.is_mucci_card_admin() from public;
@@ -80,7 +81,7 @@ declare
   created_card_id uuid;
   created_token text;
 begin
-  if auth.uid() is null or lower(coalesce(auth.jwt() ->> 'email', '')) <> 'anthony@mucciproducts.com' then
+  if not public.is_mucci_card_admin() then
     raise exception 'Administrator access required';
   end if;
   if nullif(trim(p_name), '') is null then raise exception 'Name is required'; end if;

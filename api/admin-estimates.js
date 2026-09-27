@@ -3,6 +3,7 @@
 const auth = require("./_admin-auth");
 const db = require("./_admin-supabase");
 const listing = require("./_etsy-listing");
+const estimateDrive = require("./estimate-drive");
 
 const QUOTE_PATTERN = /^MP-[A-HJ-NP-Z2-9]{5}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -69,7 +70,12 @@ async function handleAction(config, user, body) {
       const estimateId = uuid(body.estimateId);
       if (!estimateId) throw new Error("Invalid estimate.");
       const values = reviewValues(body);
-      const estimate = await findById(config, estimateId);
+      const saved = await db.rpc(config, "admin_save_print_estimate_review", {
+        p_estimate_id:estimateId, p_final_price:values.finalPrice, p_final_quantity:values.physicalQuantity,
+        p_admin_notes:values.adminNotes || null, p_clarification_notes:values.clarificationNotes || null,
+        p_processing_time_override:values.processingOverride || null
+      });
+      const estimate = saved?.[0] || null;
       if (!estimate) throw new Error("Estimate not found.");
       const prepared = listing.buildPackage(estimate, { ...values, processing:values.processingOverride || listing.suggestProcessing(estimate) });
       const snapshots = await db.rpc(config, "admin_prepare_etsy_listing", {
@@ -78,7 +84,14 @@ async function handleAction(config, user, body) {
         p_physical_quantity:values.physicalQuantity, p_processing_time:prepared.processing,
         p_generated_by:user.id
       });
-      return { prepared, snapshot:snapshots?.[0] || null, estimate:{ ...estimate, final_price:values.finalPrice, final_quantity:values.physicalQuantity, admin_notes:values.adminNotes || null, clarification_notes:values.clarificationNotes || null, processing_time_override:values.processingOverride || null, status:"etsy_prepared" } };
+      return { prepared, snapshot:snapshots?.[0] || null, estimate:{ ...estimate, status:"etsy_prepared" } };
+    }
+    case "mirror_drive": {
+      const estimateId = uuid(body.estimateId);
+      if (!estimateId) throw new Error("Invalid estimate.");
+      const estimate = await findById(config, estimateId);
+      if (!estimate?.file_path) throw new Error("Uploaded file not found.");
+      return estimateDrive.mirrorEstimate(config, estimate);
     }
     case "signed_file": {
       const estimateId = uuid(body.estimateId);

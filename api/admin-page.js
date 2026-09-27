@@ -4,8 +4,10 @@ const auth = require("./_admin-auth");
 
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" })[character]);
 
-function page({ title, body, script = "", authenticated = false }) {
-  return `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive,nosnippet"><title>${escapeHtml(title)} | Mucci Products</title><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/cards.css"><link rel="stylesheet" href="/assets/management.css"></head><body class="cards-page"><main class="dashboard-shell">${authenticated ? '<header class="page-header"><a href="/"><img src="/assets/mucci-products-logo.png" alt="Mucci Products"></a><nav class="management-nav" aria-label="Administration"><a href="./estimates">Estimates</a><a href="./cards">Digital Cards</a><a href="./security">Security</a><form method="post" action="/api/admin-logout"><button class="button button-secondary" type="submit">Sign out</button></form></nav></header>' : ""}${body}</main>${script ? `<script src="${escapeHtml(script)}" defer></script>` : ""}</body></html>`;
+function page({ title, body, scripts = [], authenticated = false, basePath = "" }) {
+  const navigation = authenticated ? `<header class="page-header"><a href="/"><img src="/assets/mucci-products-logo.png" alt="Mucci Products"></a><nav class="management-nav" aria-label="Administration"><a href="${escapeHtml(basePath)}/estimates">Estimates</a><a href="${escapeHtml(basePath)}/cards">Digital Cards</a><a href="${escapeHtml(basePath)}/security">Security</a><form method="post" action="/api/admin-logout"><button class="button button-secondary" type="submit">Sign out</button></form></nav></header>` : "";
+  const scriptTags = scripts.map((script) => `<script src="${escapeHtml(script)}" defer></script>`).join("");
+  return `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive,nosnippet"><title>${escapeHtml(title)} | Mucci Products</title><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/cards.css"><link rel="stylesheet" href="/assets/management.css"></head><body class="cards-page"><main class="dashboard-shell">${navigation}${body}</main>${scriptTags}</body></html>`;
 }
 
 function loginPage() {
@@ -37,8 +39,10 @@ module.exports = async function handler(req, res) {
       auth.appendCookies(res, [auth.cookie(auth.RETURN_COOKIE, `${config.routeSlug}/${requestedSection}`, 600, "/api")]);
       return res.status(200).send(loginPage());
     }
-    const script = requestedSection === "cards" ? "/assets/management-cards.js" : requestedSection === "estimates" ? "/assets/management-estimates.js" : "";
-    return res.status(200).send(page({ title:requestedSection === "cards" ? "Card Dashboard" : requestedSection === "security" ? "Security" : "Print Estimates", body:adminBody(requestedSection, result.user, result.bootstrap), script, authenticated:true }));
+    const scripts = requestedSection === "cards"
+      ? ["/config.js", "/card-core.js", "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js", "/assets/management-cards.js"]
+      : requestedSection === "estimates" ? ["/config.js", "/assets/management-estimates.js"] : [];
+    return res.status(200).send(page({ title:requestedSection === "cards" ? "Card Dashboard" : requestedSection === "security" ? "Security" : "Print Estimates", body:adminBody(requestedSection, result.user, result.bootstrap), scripts, authenticated:true, basePath:`/${slug}` }));
   } catch {
     return auth.notFound(res);
   }

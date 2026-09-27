@@ -3,11 +3,8 @@
 
   const root = document.querySelector("#estimates-admin");
   const config = window.MUCCI_CONFIG || {};
-  const adminConfig = window.MUCCI_ESTIMATE_ADMIN_CONFIG;
-  const listing = window.MucciEtsyListing;
-  const allowedAdminEmail = "anthony@mucciproducts.com";
+  const statuses = ["pending", "reviewed", "etsy_prepared", "completed", "declined"];
   const quotePattern = /^MP-[A-HJ-NP-Z2-9]{5}$/;
-  let client;
   let activeEstimate = null;
   let activeHistory = [];
   let activeFilter = "all";
@@ -35,45 +32,31 @@
     return fallback;
   };
 
-  if (!config.supabaseUrl || !config.supabaseAnonKey || !window.supabase || !adminConfig || !listing) {
-    root.innerHTML = '<div class="dashboard-notice">The estimate administration configuration is incomplete.</div>';
-    return;
+  async function apiRequest(action, values = {}) {
+    const response = await fetch("/api/admin-estimates", {
+      method:"POST",
+      credentials:"same-origin",
+      headers:{ "Content-Type":"application/json" },
+      body:JSON.stringify({ action, ...values })
+    });
+    if (response.status === 404) {
+      window.location.reload();
+      throw new Error("Your administrator session is no longer available.");
+    }
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "The administrative request could not be completed.");
+    return payload;
   }
-  client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
 
   async function init() {
-    const { data:{ session } } = await client.auth.getSession();
-    if (!session) return renderLogin();
-    if (String(session.user.email || "").toLowerCase() !== allowedAdminEmail) {
-      await client.auth.signOut();
-      return renderLogin("This account is not authorized.");
-    }
     const quote = quoteFromUrl();
     if (quote && quotePattern.test(quote)) await findEstimate(quote); else await loadRecent();
-  }
-
-  function renderLogin(initialMessage) {
-    root.innerHTML = `<form id="login-form" class="saved-card owner-form setup-card" autocomplete="off"><p class="eyebrow">Restricted administration</p><h2>Admin sign in</h2><label>Email address<input required type="email" name="email" autocomplete="username"></label><label>Password<input required type="password" name="password" autocomplete="current-password"></label><button class="button button-primary" type="submit">Sign in</button><p role="status">${escapeHtml(initialMessage || "")}</p></form>`;
-    document.querySelector("#login-form").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const status = form.querySelector('[role="status"]');
-      const button = form.querySelector("button");
-      const values = Object.fromEntries(new FormData(form));
-      const email = String(values.email || "").trim().toLowerCase();
-      button.disabled = true; status.textContent = "Signing in…";
-      if (email !== allowedAdminEmail) { status.textContent = "The email or password is incorrect."; button.disabled = false; return; }
-      const { error } = await client.auth.signInWithPassword({ email, password:values.password });
-      if (error) { status.textContent = "The email or password is incorrect."; button.disabled = false; return; }
-      const quote = quoteFromUrl();
-      if (quote && quotePattern.test(quote)) await findEstimate(quote); else await loadRecent();
-    });
   }
 
   function adminShell(content, notice = "") {
     const driveNotice = driveStatus() === "connected" ? "Google Drive is connected." : driveStatus() === "error" ? "Google Drive could not be connected. Check the OAuth redirect URI and try again." : "";
     root.innerHTML = `<div class="admin-tools">
-      <div class="dashboard-user"><p>Protected estimate administration</p><div class="card-actions"><a class="button button-secondary" href="${escapeHtml(config.etsyUrl || "https://www.etsy.com/shop/MucciProducts")}" target="_blank" rel="noopener noreferrer">Open Etsy Messages</a><button id="connect-drive" class="button button-secondary" type="button">Connect Google Drive</button><button id="sign-out" class="button button-secondary" type="button">Sign out</button></div></div>
+      <div class="dashboard-user"><p>Protected estimate administration</p><div class="card-actions"><a class="button button-secondary" href="${escapeHtml(config.etsyUrl || "https://www.etsy.com/shop/MucciProducts")}" target="_blank" rel="noopener noreferrer">Open Etsy Messages</a><button id="connect-drive" class="button button-secondary" type="button">Connect Google Drive</button></div></div>
       <p id="drive-connection-status" class="dashboard-notice" role="status"${driveNotice ? "" : " hidden"}>${escapeHtml(driveNotice)}</p>
       <section class="find-estimate" aria-labelledby="find-estimate-title"><p class="eyebrow">Find Estimate</p><h2 id="find-estimate-title">Paste a customer quote code</h2><form id="search-form" class="admin-search"><input name="code" value="${escapeHtml(activeEstimate?.quote_code || quoteFromUrl())}" maxlength="32" placeholder="MP-A42K7" aria-label="Quote code" autocapitalize="characters" autocomplete="off"><button class="button button-primary" type="submit">Find Quote</button><button class="button button-secondary" id="show-recent" type="button">Show Recent</button></form><p id="search-status" class="form-status" role="status">${escapeHtml(notice)}</p></section>
       ${content}
@@ -82,7 +65,6 @@
   }
 
   function bindShell() {
-    document.querySelector("#sign-out").addEventListener("click", async () => { await client.auth.signOut(); renderLogin(); });
     document.querySelector("#connect-drive").addEventListener("click", connectDrive);
     document.querySelector("#search-form").addEventListener("submit", (event) => {
       event.preventDefault();
@@ -105,13 +87,15 @@
     }
     setQuoteUrl(quote);
     adminShell('<p class="loading-state" role="status">Finding estimate…</p>');
-    const { data, error } = await client.rpc("admin_find_print_estimate", { p_quote_code:quote });
-    if (error) { adminShell('<section class="empty-state">The estimate could not be loaded.</section>', errorMessage(error, "The estimate could not be loaded.")); return; }
-    if (!data?.length) { adminShell('<section class="empty-state">Quote code not found.</section>', "Quote code not found."); return; }
-    activeEstimate = data[0];
-    const historyResult = await client.from("etsy_listing_preparations").select("*").eq("estimate_id", activeEstimate.id).order("generated_at", { ascending:false }).limit(10);
-    activeHistory = historyResult.error ? [] : (historyResult.data || []);
-    renderEstimateReview();
+    try {
+      const payload = await apiRequest("find", { quoteCode:quote });
+      if (!payload.estimate) { adminShell('<section class="empty-state">Quote code not found.</section>', "Quote code not found."); return; }
+      activeEstimate = payload.estimate;
+      activeHistory = payload.history || [];
+      renderEstimateReview();
+    } catch (error) {
+      adminShell('<section class="empty-state">The estimate could not be loaded.</section>', errorMessage(error, "The estimate could not be loaded."));
+    }
   }
 
   async function loadRecent(filter = activeFilter) {
@@ -120,15 +104,16 @@
     activeFilter = filter;
     setQuoteUrl("");
     adminShell('<p class="loading-state" role="status">Loading recent estimates…</p>');
-    const manualOnly = filter === "manual_review";
-    const status = manualOnly || filter === "all" ? null : filter;
-    const { data, error } = await client.rpc("admin_recent_print_estimates", { p_status:status, p_manual_review:manualOnly });
-    if (error) { adminShell('<section class="empty-state">Recent estimates could not be loaded.</section>', errorMessage(error, "Recent estimates could not be loaded.")); return; }
-    renderRecent(data || []);
+    try {
+      const payload = await apiRequest("recent", { filter });
+      renderRecent(payload.estimates || []);
+    } catch (error) {
+      adminShell('<section class="empty-state">Recent estimates could not be loaded.</section>', errorMessage(error, "Recent estimates could not be loaded."));
+    }
   }
 
   function renderRecent(estimates) {
-    const filters = ["all", ...adminConfig.statuses, "manual_review"];
+    const filters = ["all", ...statuses, "manual_review"];
     const content = `<section class="recent-estimates"><div class="section-heading"><div><p class="eyebrow">Recent estimates</p><h2>Newest first</h2></div><div class="filter-row" aria-label="Estimate filters">${filters.map((filter) => `<button class="filter-button${activeFilter === filter ? " active" : ""}" type="button" data-filter="${filter}">${label(filter)}</button>`).join("")}</div></div><div class="estimate-list">${estimates.length ? estimates.map(recentEstimateMarkup).join("") : '<div class="empty-state">No estimates match this filter.</div>'}</div></section>`;
     adminShell(content);
     document.querySelectorAll("[data-filter]").forEach((button) => button.addEventListener("click", () => loadRecent(button.dataset.filter)));
@@ -141,7 +126,7 @@
 
   function renderEstimateReview(generatedPackage = null, successMessage = "") {
     const estimate = activeEstimate;
-    const processing = listing.suggestProcessing(estimate, adminConfig);
+    const processing = estimate.processing_time_override || estimate.suggested_processing || "Manual processing time selection recommended.";
     const history = activeHistory.length ? `<div class="history-list">${activeHistory.map((entry) => `<div><span><strong>${new Date(entry.generated_at).toLocaleString("en-CA")}</strong>${entry.generated_title ? `<small>${escapeHtml(entry.generated_title)}</small>` : ""}</span><span>${escapeHtml(money(entry.final_price))} · Etsy quantity ${escapeHtml(entry.listing_quantity || 1)} · Physical quantity ${escapeHtml(entry.physical_quantity || activeEstimate.quantity)} · ${escapeHtml(entry.processing_time)}</span></div>`).join("")}</div>` : '<p>No Etsy listing packages prepared yet.</p>';
     const content = `<article class="estimate-review">
       <header class="review-header"><div><p class="eyebrow">Quote review</p><h2>${escapeHtml(estimate.quote_code)}</h2><small>Submitted ${new Date(estimate.created_at).toLocaleString("en-CA")}</small></div><span class="status-badge status-${escapeHtml(estimate.status)}">${escapeHtml(label(estimate.status))}</span></header>
@@ -149,7 +134,7 @@
       <section class="review-section"><h3>Project summary</h3>${estimateDetailsMarkup(estimate)}</section>
       <section class="review-section"><h3>Customer notes</h3><p class="notes">${escapeHtml(estimate.notes || "No customer notes provided.")}</p></section>
       <form id="review-form" class="review-form">
-        <section class="review-section"><h3>Final Etsy order</h3><div class="form-grid"><label>Final Etsy Price (CAD)<input required name="final_price" inputmode="decimal" value="${finalPrice(estimate).toFixed(2)}" pattern="[0-9]+(?:\\.[0-9]{1,2})?" aria-describedby="price-help"></label><label>Final Quantity<input required name="final_quantity" type="number" min="1" max="999" value="${finalQuantity(estimate)}"></label><label>Etsy Listing Quantity<input required name="listing_quantity" type="number" min="1" max="999" value="${adminConfig.defaultListingQuantity}"><small>This Etsy listing represents the complete custom project.</small></label><label>Processing time override<input name="processing_time_override" maxlength="120" value="${escapeHtml(estimate.processing_time_override || "")}" placeholder="${escapeHtml(processing)}"><small>Leave blank to use the suggested window.</small></label></div><p id="price-help" class="help-text">Positive amount with a maximum of two decimal places.</p></section>
+        <section class="review-section"><h3>Final Etsy order</h3><div class="form-grid"><label>Final Etsy Price (CAD)<input required name="final_price" inputmode="decimal" value="${finalPrice(estimate).toFixed(2)}" pattern="[0-9]+(?:\\.[0-9]{1,2})?" aria-describedby="price-help"></label><label>Final Quantity<input required name="final_quantity" type="number" min="1" max="999" value="${finalQuantity(estimate)}"></label><label>Etsy Listing Quantity<input required name="listing_quantity" type="number" min="1" max="999" value="1"><small>This Etsy listing represents the complete custom project.</small></label><label>Processing time override<input name="processing_time_override" maxlength="120" value="${escapeHtml(estimate.processing_time_override || "")}" placeholder="${escapeHtml(processing)}"><small>Leave blank to use the suggested window.</small></label></div><p id="price-help" class="help-text">Positive amount with a maximum of two decimal places.</p></section>
         <section class="review-section"><h3>Private review notes</h3><label>Admin notes<textarea name="admin_notes" rows="3" maxlength="5000">${escapeHtml(estimate.admin_notes || "")}</textarea></label><label>Clarification needed before listing<textarea name="clarification_notes" rows="3" maxlength="3000" placeholder="Leave blank when no clarification is needed.">${escapeHtml(estimate.clarification_notes || "")}</textarea></label><button class="button button-secondary" id="save-review" type="button">Save Review Details</button><p id="save-status" class="form-status" role="status"></p></section>
         <section class="review-section"><h3>Estimate review checklist</h3><div id="review-checklist" class="checklist">${checklistMarkup(estimate)}</div><label class="override-check"><input type="checkbox" name="admin_override"> Admin override: prepare despite unchecked items</label></section>
         <div class="primary-actions"><button class="button button-primary prepare-button" id="prepare-listing" type="submit" disabled>Prepare Etsy Listing</button><button class="button button-secondary" type="button" data-status-action="reviewed">Mark Reviewed</button><button class="button button-secondary" type="button" data-status-action="completed">Mark Completed</button><button class="button button-danger" type="button" data-status-action="declined">Decline</button></div><p id="review-status" class="form-status" role="status">${escapeHtml(successMessage)}</p>
@@ -172,7 +157,7 @@
       ["Customer name", estimate.name || "Not provided"], ["Customer email", estimate.email || "Not provided (Etsy contact)"],
       ["Estimated project price", `${displayPrice(estimate)} CAD`], ["Estimated price per item", `${money(estimate.estimated_price_per_item)} CAD`],
       ["Quantity", estimate.quantity], ["File status", label(estimate.file_status)], ["Uploaded file", estimate.original_file_name || (estimate.file_path ? "Uploaded model" : "Not provided")],
-      ["Dimensions", dimensions], ["Size category", label(estimate.size_category)], ["Material", estimate.material || adminConfig.defaultMaterial],
+      ["Dimensions", dimensions], ["Size category", label(estimate.size_category)], ["Material", estimate.material || "PLA"],
       ["Colours", estimate.colour_count], ["Design level", label(estimate.design_level)], ["Assembly", estimate.assembly_required ? "Required" : "Not required"],
       ["Production time", time], ["Print profile", label(estimate.print_profile)], ["Filament per item", estimate.filament_grams_per_item == null ? "Not available" : `${Number(estimate.filament_grams_per_item).toFixed(1)} g`],
       ["Total material", estimate.estimated_material_grams == null ? "Not available" : `${Number(estimate.estimated_material_grams).toFixed(1)} g including purge`],
@@ -209,14 +194,9 @@
 
   async function saveReviewDetails(showConfirmation = true) {
     const values = valuesFromReviewForm();
-    const { data, error } = await client.rpc("admin_save_print_estimate_review", {
-      p_estimate_id:activeEstimate.id, p_final_price:values.finalPrice,
-      p_final_quantity:values.physicalQuantity, p_admin_notes:values.adminNotes || null,
-      p_clarification_notes:values.clarificationNotes || null,
-      p_processing_time_override:values.processingOverride || null
-    });
-    if (error || !data?.length) throw new Error(errorMessage(error, "The review details could not be saved."));
-    activeEstimate = data[0];
+    const payload = await apiRequest("save", { estimateId:activeEstimate.id, ...values });
+    if (!payload.estimate) throw new Error("The review details could not be saved.");
+    activeEstimate = payload.estimate;
     if (showConfirmation) document.querySelector("#save-status").textContent = "Review details saved.";
     return values;
   }
@@ -249,19 +229,12 @@
     const button = document.querySelector("#prepare-listing");
     button.disabled = true; status.textContent = "Preparing Etsy listing details…";
     try {
-      const values = await saveReviewDetails(false);
-      const processing = values.processingOverride || listing.suggestProcessing(activeEstimate, adminConfig);
-      const prepared = listing.buildPackage(activeEstimate, { ...values, processing }, adminConfig);
-      const { data, error } = await client.rpc("admin_prepare_etsy_listing", {
-        p_estimate_id:activeEstimate.id, p_generated_title:prepared.title,
-        p_generated_description:prepared.description, p_final_price:values.finalPrice,
-        p_listing_quantity:values.listingQuantity, p_physical_quantity:values.physicalQuantity,
-        p_processing_time:prepared.processing
-      });
-      if (error || !data?.length) throw new Error(errorMessage(error, "The Etsy listing package could not be saved."));
-      activeEstimate = { ...activeEstimate, final_price:values.finalPrice, final_quantity:values.physicalQuantity, status:"etsy_prepared", etsy_prepared_at:new Date().toISOString(), clarification_notes:values.clarificationNotes, processing_time_override:values.processingOverride || null };
-      activeHistory = [data[0], ...activeHistory];
-      renderEstimateReview({ ...prepared, reply:listing.buildReply(activeEstimate, values.finalPrice, values.clarificationNotes) }, "Etsy listing package prepared and saved.");
+      const values = valuesFromReviewForm();
+      const payload = await apiRequest("prepare", { estimateId:activeEstimate.id, ...values });
+      if (!payload.estimate || !payload.prepared || !payload.snapshot) throw new Error("The Etsy listing package could not be saved.");
+      activeEstimate = payload.estimate;
+      activeHistory = [payload.snapshot, ...activeHistory];
+      renderEstimateReview(payload.prepared, "Etsy listing package prepared and saved.");
     } catch (error) {
       status.textContent = error.message || "The Etsy listing package could not be prepared.";
       button.disabled = false;
@@ -274,10 +247,15 @@
 
   async function setStatus(statusValue, button) {
     button.disabled = true;
-    const { data, error } = await client.rpc("admin_set_print_estimate_status", { p_estimate_id:activeEstimate.id, p_status:statusValue });
-    if (error || !data?.length) { document.querySelector("#review-status").textContent = errorMessage(error, "The estimate status could not be changed."); button.disabled = false; return; }
-    activeEstimate = data[0];
-    renderEstimateReview(null, `Status changed to ${label(statusValue)}.`);
+    try {
+      const payload = await apiRequest("status", { estimateId:activeEstimate.id, status:statusValue });
+      if (!payload.estimate) throw new Error("The estimate status could not be changed.");
+      activeEstimate = payload.estimate;
+      renderEstimateReview(null, `Status changed to ${label(statusValue)}.`);
+    } catch (error) {
+      document.querySelector("#review-status").textContent = errorMessage(error, "The estimate status could not be changed.");
+      button.disabled = false;
+    }
   }
 
   async function copyText(text, button) {
@@ -309,10 +287,8 @@
     const button = event.currentTarget;
     const status = document.querySelector("#drive-connection-status");
     button.disabled = true; status.hidden = false; status.textContent = "Opening Google authorization…";
-    const { data:{ session } } = await client.auth.getSession();
-    if (!session) { status.textContent = "Sign in again before connecting Google Drive."; button.disabled = false; return; }
     try {
-      const response = await fetch("/api/google-drive-connect", { method:"POST", headers:{ Authorization:`Bearer ${session.access_token}` } });
+      const response = await fetch("/api/google-drive-connect", { method:"POST", credentials:"same-origin" });
       const payload = await response.json();
       if (!response.ok || !payload.authorizationUrl) throw new Error("Google Drive connection could not be started.");
       window.location.assign(payload.authorizationUrl);
@@ -330,13 +306,8 @@
     button.textContent = "Creating Drive folder…";
     status.textContent = "Creating the private quote folder and copying the uploaded model…";
     try {
-      const response = await fetch("/api/estimate-drive", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body:JSON.stringify({ quoteCode:activeEstimate.quote_code, notificationToken:activeEstimate.notification_token })
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok || (!payload.mirrored && !payload.organized && !payload.accepted)) {
+      const payload = await apiRequest("mirror_drive", { estimateId:activeEstimate.id });
+      if (!payload.mirrored && !payload.organized && !payload.accepted) {
         throw new Error("The private Drive copy could not be created.");
       }
       await findEstimate(activeEstimate.quote_code);
@@ -350,10 +321,14 @@
   async function openFile(path, button) {
     const original = button.textContent;
     button.disabled = true; button.textContent = "Creating secure link…";
-    const { data, error } = await client.storage.from("print-estimate-files").createSignedUrl(path, 60);
+    try {
+      const payload = await apiRequest("signed_file", { estimateId:activeEstimate.id });
+      if (!payload.signedUrl) throw new Error("Missing signed URL.");
+      window.open(payload.signedUrl, "_blank", "noopener,noreferrer");
+    } catch {
+      document.querySelector("#review-status").textContent = "The private file link could not be created. It may have expired or the file may be missing.";
+    }
     button.disabled = false; button.textContent = original;
-    if (error || !data?.signedUrl) { document.querySelector("#review-status").textContent = "The private file link could not be created. It may have expired or the file may be missing."; return; }
-    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   }
 
   init();

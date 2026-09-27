@@ -1,6 +1,6 @@
 "use strict";
 
-const OWNER_EMAIL = "anthony@mucciproducts.com";
+const OWNER_EMAIL = "order@mucciproducts.com";
 const QUOTE_CODE_PATTERN = /^MP-[A-HJ-NP-Z2-9]{5}$/;
 
 function text(value, maximum = 3000) {
@@ -56,17 +56,15 @@ function estimateRows(estimate) {
   ];
 }
 
-function buildEstimateEmail(estimate, siteUrl) {
+function buildEstimateEmail(estimate) {
   const rows = estimateRows(estimate);
   const code = text(estimate.quote_code, 20);
   const notes = text(estimate.notes, 3000) || "No notes provided.";
-  const baseUrl = String(siteUrl || "https://mucciproducts.com").replace(/\/$/, "");
-  const portalUrl = `${baseUrl}/admin/estimates/?quote=${encodeURIComponent(code)}`;
   const htmlRows = rows.map(([name, value]) => `<tr><th style="padding:9px 12px;text-align:left;vertical-align:top;border-bottom:1px solid #d9e4e9;color:#496479;font-size:13px;">${escapeHtml(name)}</th><td style="padding:9px 12px;border-bottom:1px solid #d9e4e9;color:#082a4a;font-weight:600;">${escapeHtml(value)}</td></tr>`).join("");
-  const html = `<!doctype html><html><body style="margin:0;padding:24px;background:#f7fbfd;font-family:Arial,sans-serif;color:#082a4a;"><main style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #bfd0d8;border-radius:12px;overflow:hidden;"><header style="padding:26px;background:#082a4a;color:#ffffff;"><p style="margin:0 0 8px;color:#73e0dc;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">New 3D printing estimate</p><h1 style="margin:0;font-size:28px;">${escapeHtml(code)}</h1><p style="margin:10px 0 0;font-size:20px;font-weight:700;">${escapeHtml(priceRange(estimate))} CAD</p></header><section style="padding:22px;"><table role="presentation" style="width:100%;border-collapse:collapse;font-size:15px;">${htmlRows}</table><h2 style="margin:24px 0 8px;font-size:17px;">Customer notes</h2><p style="margin:0;padding:14px;background:#eef8fa;border-left:4px solid #16b8b4;white-space:pre-wrap;line-height:1.5;">${escapeHtml(notes)}</p><p style="margin:24px 0 0;"><a href="${escapeHtml(portalUrl)}" style="display:inline-block;padding:13px 18px;border-radius:6px;background:#082a4a;color:#ffffff;text-decoration:none;font-weight:700;">Open estimate and model file</a></p><p style="margin:12px 0 0;color:#496479;font-size:13px;">Admin sign-in is required. The model opens through a short-lived secure link.</p></section></main></body></html>`;
+  const html = `<!doctype html><html><body style="margin:0;padding:24px;background:#f7fbfd;font-family:Arial,sans-serif;color:#082a4a;"><main style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #bfd0d8;border-radius:12px;overflow:hidden;"><header style="padding:26px;background:#082a4a;color:#ffffff;"><p style="margin:0 0 8px;color:#73e0dc;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">New 3D printing estimate</p><h1 style="margin:0;font-size:28px;">${escapeHtml(code)}</h1><p style="margin:10px 0 0;font-size:20px;font-weight:700;">${escapeHtml(priceRange(estimate))} CAD</p></header><section style="padding:22px;"><table role="presentation" style="width:100%;border-collapse:collapse;font-size:15px;">${htmlRows}</table><h2 style="margin:24px 0 8px;font-size:17px;">Customer notes</h2><p style="margin:0;padding:14px;background:#eef8fa;border-left:4px solid #16b8b4;white-space:pre-wrap;line-height:1.5;">${escapeHtml(notes)}</p><p style="margin:18px 0 0;color:#496479;font-size:13px;">Open the private owner area and search for quote ${escapeHtml(code)}. No administration address is included in email.</p></section></main></body></html>`;
   const plainRows = rows.map(([name, value]) => `${name}: ${value}`).join("\n");
-  const plain = `NEW 3D PRINTING ESTIMATE\n\n${plainRows}\n\nCustomer notes:\n${notes}\n\nOpen estimate and model file (admin sign-in required):\n${portalUrl}`;
-  return { subject:`New 3D estimate ${code} — ${priceRange(estimate)} CAD`, html, text:plain, portalUrl };
+  const plain = `NEW 3D PRINTING ESTIMATE\n\n${plainRows}\n\nCustomer notes:\n${notes}\n\nOpen the private owner area and search for quote ${code}. No administration address is included in email.`;
+  return { subject:`New 3D estimate ${code} — ${priceRange(estimate)} CAD`, html, text:plain };
 }
 
 function normalizeQuoteCode(value) {

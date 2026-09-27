@@ -11,14 +11,16 @@ const estimate = {
   print_profile:"standard", purge_waste_percent:10, filament_grams_per_item:10
 };
 
-test("builds an easy-to-read owner estimate email with a portal link", () => {
+test("builds an easy-to-read owner estimate email without leaking the private route", () => {
   const built = email.buildEstimateEmail(estimate, "https://mucciproducts.com/");
   assert.match(built.subject, /MP-A42K7/);
   assert.match(built.text, /Estimated price: \$72\.40 CAD/);
   assert.match(built.text, /Filament: 10\.0 g per item/);
   assert.match(built.text, /Blue & strong/);
   assert.match(built.text, /Print profile: Standard Detail/);
-  assert.match(built.portalUrl, /\/admin\/estimates\/\?quote=MP-A42K7$/);
+  assert.equal(built.portalUrl, undefined);
+  assert.doesNotMatch(built.text, /https?:\/\/|\/admin|card-dashboard/i);
+  assert.match(built.text, /search for quote MP-A42K7/i);
   assert.match(built.html, /Anthony &lt;Owner&gt;/);
   assert.doesNotMatch(built.html, /Anthony <Owner>/);
 });

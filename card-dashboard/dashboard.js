@@ -4,75 +4,36 @@
   const config = window.MUCCI_CONFIG || {};
   const core = window.MucciCards;
   const canonicalSiteUrl = String(config.publicSiteUrl || "https://mucciproducts.com").replace(/\/$/, "");
-  const allowedAdminEmail = "anthony@mucciproducts.com";
   const fields = ["name", "company", "title", "phone", "email", "website", "linkedin", "instagram", "address", "bio", "logo_url", "profile_image_url"];
-  let currentUser = null;
   const escapeHtml = (value) => String(value || "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
   const label = (field) => field.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-  if (!config.supabaseUrl || !config.supabaseAnonKey || !window.supabase) {
-    root.innerHTML = '<div class="dashboard-notice"><strong>Supabase setup required.</strong> Add the public Supabase URL and anon key to <code>config.js</code>, then run migrations 001 and 002. The owner sign-in and profile setup will become active after that configuration is deployed.</div>';
-    return;
-  }
-
-  const client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
-
-  async function init() {
-    const { data: { session } } = await client.auth.getSession();
-    if (!session) return renderLogin();
-    if (String(session.user.email || "").toLowerCase() !== allowedAdminEmail) {
-      await client.auth.signOut();
-      return renderLogin("This account is not authorized to access the admin panel.");
-    }
-    currentUser = session.user;
-    await loadDashboard();
-  }
-
-  function renderLogin(initialMessage) {
-    root.innerHTML = `<form id="login-form" class="saved-card owner-form setup-card" autocomplete="off"><p class="eyebrow">Restricted administration</p><h2>Admin sign in</h2><p>Enter the administrator email and password to manage the example digital-card profiles.</p><label>Email address<input required type="email" name="email" inputmode="email" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Email address"></label><label>Password<input required type="password" name="password" autocomplete="current-password"></label><button class="button button-primary" type="submit">Sign in to admin panel</button><p id="login-message" role="status">${escapeHtml(initialMessage || "")}</p></form>`;
-    document.querySelector("#login-form").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const message = form.querySelector("#login-message");
-      const button = form.querySelector("button");
-      button.disabled = true;
-      message.textContent = "Signing in…";
-      const values = Object.fromEntries(new FormData(form));
-      const submittedEmail = String(values.email || "").trim().toLowerCase();
-      if (submittedEmail !== allowedAdminEmail) {
-        message.textContent = "The email or password is incorrect.";
-        button.disabled = false;
-        return;
-      }
-      const { data, error } = await client.auth.signInWithPassword({ email: submittedEmail, password: values.password });
-      if (!error && String(data.user?.email || "").toLowerCase() !== allowedAdminEmail) {
-        await client.auth.signOut();
-        message.textContent = "This account is not authorized to access the admin panel.";
-        button.disabled = false;
-        return;
-      }
-      if (error) {
-        message.textContent = "The email or password is incorrect.";
-        button.disabled = false;
-        return;
-      }
-      currentUser = data.user;
-      await loadDashboard();
+  async function apiRequest(action, values = {}) {
+    const response = await fetch("/api/admin-cards", {
+      method:"POST",
+      credentials:"same-origin",
+      headers:{ "Content-Type":"application/json" },
+      body:JSON.stringify({ action, ...values })
     });
+    if (response.status === 404) {
+      window.location.reload();
+      throw new Error("Your administrator session is no longer available.");
+    }
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "The administrative request could not be completed.");
+    return payload;
   }
 
   async function loadDashboard() {
     root.innerHTML = '<p role="status">Loading your cards…</p>';
-    const [{ data: profiles, error: profilesError }, { data: cards, error: cardsError }] = await Promise.all([
-      client.from("profiles").select("*").order("created_at"),
-      client.from("physical_cards").select("id,profile_id,public_token,card_label,is_active,created_at").order("created_at"),
-    ]);
-    if (profilesError || cardsError) {
-      root.innerHTML = `<div class="dashboard-notice"><strong>We couldn’t load your dashboard.</strong><br>${escapeHtml((profilesError || cardsError).message)}</div>`;
-      return;
+    try {
+      const payload = await apiRequest("list");
+      const profiles = payload.profiles || [];
+      if (!profiles.length) return renderFirstProfileSetup();
+      renderDashboard(profiles, payload.cards || []);
+    } catch (error) {
+      root.innerHTML = `<div class="dashboard-notice"><strong>We couldn’t load your dashboard.</strong><br>${escapeHtml(error.message)}</div>`;
     }
-    if (!profiles.length) return renderFirstProfileSetup();
-    renderDashboard(profiles, cards || []);
   }
 
   function setupField(name, type, required) {
@@ -86,7 +47,6 @@
 
   function renderFirstProfileSetup() {
     root.innerHTML = `<div class="dashboard-stack">${userBar()}${createProfileForm("setup-form", "Create your first digital card", "Add only the details you want visitors to see. You can change or disable the profile later.", "Create profile and card")}</div>`;
-    bindAccountActions();
     bindCreateProfileForms();
   }
 
@@ -96,17 +56,19 @@
     const message = form.querySelector('[role="status"]');
     const button = form.querySelector('button[type="submit"]');
     const values = Object.fromEntries(new FormData(form));
-    const args = {};
-    ["name", "company", "title", "phone", "email", "website", "linkedin", "instagram", "address", "bio"].forEach((field) => { args[`p_${field}`] = values[field] || null; });
     button.disabled = true;
     message.textContent = "Creating the profile and secure card URL…";
-    const { error } = await client.rpc("create_my_digital_card", args);
-    if (error) { message.textContent = error.message; button.disabled = false; return; }
-    await loadDashboard();
+    try {
+      await apiRequest("create", { profile:values });
+      await loadDashboard();
+    } catch (error) {
+      message.textContent = error.message;
+      button.disabled = false;
+    }
   }
 
   function userBar() {
-    return `<div class="dashboard-user"><p>Signed in as <strong>${escapeHtml(currentUser.email)}</strong></p><div class="saved-card-actions"><a class="button button-secondary" href="../admin/estimates/">3D Print Estimates</a><button class="button button-secondary" id="sign-out" type="button">Sign out</button></div></div>`;
+    return '<div class="dashboard-user"><p>Protected card administration</p></div>';
   }
 
   function profileField(profile, field) {
@@ -117,7 +79,6 @@
 
   function renderDashboard(profiles, cards) {
     root.innerHTML = `<div class="dashboard-stack">${userBar()}<details class="new-card-panel"><summary class="button button-primary">Create another card profile</summary>${createProfileForm("new-card-form", "Create another digital card", "Each profile receives a separate random public URL and QR code.", "Create new profile and card")}</details><section class="dashboard-section"><div class="dashboard-section-heading"><div><p class="eyebrow">Public information</p><h2>Card profiles</h2></div></div><div class="saved-grid">${profiles.map((profile) => `<form class="saved-card owner-form profile-form" data-id="${profile.id}"><div class="form-grid">${fields.map((field) => profileField(profile, field)).join("")}</div><label class="checkbox-label"><input type="checkbox" name="is_active" ${profile.is_active ? "checked" : ""}> Make this profile publicly available</label><div class="upload-row"><label>Upload profile photo<input type="file" accept="image/png,image/jpeg,image/webp" data-upload="profile_image_url"></label><span></span></div><div class="upload-row"><label>Upload company logo<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" data-upload="logo_url"></label><span></span></div><button class="button button-primary" type="submit">Save profile</button><p role="status"></p></form>`).join("")}</div></section><section class="dashboard-section"><div class="dashboard-section-heading"><div><p class="eyebrow">NFC and QR</p><h2>Physical cards</h2></div></div><div class="saved-grid">${cards.map(cardMarkup).join("")}</div></section></div>`;
-    bindAccountActions();
     bindCreateProfileForms();
     document.querySelectorAll(".profile-form").forEach((form) => form.addEventListener("submit", saveProfile));
     document.querySelectorAll("[data-copy]").forEach((button) => button.addEventListener("click", async () => { await navigator.clipboard.writeText(button.dataset.copy); button.textContent = "Copied"; }));
@@ -141,11 +102,14 @@
     for (const input of form.querySelectorAll("[data-upload]")) {
       if (!input.files.length) continue;
       const file = input.files[0];
-      const extension = file.name.split(".").pop().replace(/[^a-z0-9]/gi, "").toLowerCase();
-      const objectPath = `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
-      const { error } = await client.storage.from("card-assets").upload(objectPath, file, { upsert: false });
-      if (error) throw error;
-      data[input.dataset.upload] = client.storage.from("card-assets").getPublicUrl(objectPath).data.publicUrl;
+      const ticket = await apiRequest("asset_ticket", { field:input.dataset.upload, contentType:file.type, size:file.size });
+      if (!ticket.signedUrl || !ticket.publicUrl) throw new Error("The secure upload could not be prepared.");
+      const body = new FormData();
+      body.append("cacheControl", "3600");
+      body.append("", file);
+      const upload = await fetch(ticket.signedUrl, { method:"PUT", headers:{ "x-upsert":"false" }, body });
+      if (!upload.ok) throw new Error("The selected image could not be uploaded.");
+      data[input.dataset.upload] = ticket.publicUrl;
     }
   }
 
@@ -161,20 +125,15 @@
     message.textContent = "Saving…";
     try {
       await uploadSelectedAssets(form, data);
-      const { error } = await client.from("profiles").update(data).eq("id", form.dataset.id);
-      if (error) throw error;
+      await apiRequest("update", { profileId:form.dataset.id, profile:data });
       message.textContent = "Profile saved.";
-      setTimeout(loadDashboard, 600);
+      window.setTimeout(loadDashboard, 600);
     } catch (error) { message.textContent = error.message; button.disabled = false; }
-  }
-
-  function bindAccountActions() {
-    document.querySelector("#sign-out")?.addEventListener("click", async () => { await client.auth.signOut(); currentUser = null; renderLogin(); });
   }
 
   function bindCreateProfileForms() {
     document.querySelectorAll(".create-profile-form").forEach((form) => form.addEventListener("submit", createProfile));
   }
 
-  init();
+  loadDashboard();
 })();

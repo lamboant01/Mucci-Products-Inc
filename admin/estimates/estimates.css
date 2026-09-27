@@ -162,3 +162,23 @@
   .history-list div { align-items: flex-start; flex-direction: column; }
   .history-list div > span:last-child { text-align: left; }
 }
+
+.management-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.management-nav a { color: #082a4a; font-weight: 800; text-decoration: none; }
+.management-nav form { margin: 0; }
+.management-login { width: min(520px, calc(100% - 32px)); margin: clamp(40px, 10vh, 110px) auto; padding: clamp(24px, 5vw, 46px); border: 1px solid #bfd0d8; background: #fff; }
+.management-login > img { width: min(260px, 78%); height: auto; margin-bottom: 28px; }
+.management-login h1 { font-size: clamp(2.1rem, 7vw, 4.2rem); }
+.google-sign-in { margin-top: 20px; }
+.bootstrap-notice { margin-bottom: 24px; overflow-wrap: anywhere; }
+.bootstrap-notice code,
+.security-card code { user-select: all; }
+.security-card { max-width: 900px; }
+
+@media (max-width: 700px) {
+  .page-header { align-items: flex-start; flex-direction: column; }
+  .management-nav { width: 100%; }
+  .management-nav a { flex: 1 1 auto; }
+  .management-nav form,
+  .management-nav form .button { width: 100%; }
+}

@@ -1,8 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const config = require("../admin/estimates/etsy-listing-config");
-const listing = require("../admin/estimates/etsy-listing");
+const listing = require("../api/_etsy-listing");
+const config = listing.config;
 
 const estimate = {
   id:"123e4567-e89b-42d3-a456-426614174000",
@@ -22,7 +22,7 @@ test("builds a concise customer-safe Etsy package", () => {
     finalPrice:115,
     physicalQuantity:5,
     listingQuantity:1
-  }, config);
+  });
 
   assert.equal(prepared.title, "Custom 3D Printing Order — MP-A42K7");
   assert.equal(prepared.price, "$115.00 CAD");
