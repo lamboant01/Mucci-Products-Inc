@@ -11,6 +11,7 @@
     const value = new URLSearchParams(window.location.search).get("quote")?.trim().toUpperCase() || "";
     return /^MP-[A-HJ-NP-Z2-9]{5}$/.test(value) ? value : "";
   };
+  const driveStatus = () => new URLSearchParams(window.location.search).get("drive") || "";
 
   if (!config.supabaseUrl || !config.supabaseAnonKey || !window.supabase) { root.innerHTML = '<div class="dashboard-notice">Supabase setup is required.</div>'; return; }
   const client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
@@ -49,13 +50,34 @@
   }
 
   function renderAdmin(estimates, query) {
-    root.innerHTML = `<div class="admin-tools"><div class="dashboard-user"><p>Protected estimate administration</p><button id="sign-out" class="button button-secondary" type="button">Sign out</button></div><form id="search-form" class="admin-search"><input name="code" value="${escapeHtml(query)}" pattern="MP-[A-HJ-NP-Z2-9]{5}" placeholder="MP-A42K7" aria-label="Quote code"><button class="button button-primary" type="submit">Find quote</button>${query ? '<button class="button button-secondary" id="show-all" type="button">Show newest</button>' : ""}</form><section class="estimate-list">${estimates.length ? estimates.map(estimateMarkup).join("") : '<div class="empty-state">No matching estimates found.</div>'}</section></div>`;
+    const driveNotice = driveStatus() === "connected" ? "Google Drive is connected." : driveStatus() === "error" ? "Google Drive could not be connected. Check the OAuth redirect URI and try again." : "";
+    root.innerHTML = `<div class="admin-tools"><div class="dashboard-user"><p>Protected estimate administration</p><div class="card-actions"><button id="connect-drive" class="button button-secondary" type="button">Connect Google Drive</button><button id="sign-out" class="button button-secondary" type="button">Sign out</button></div></div><p id="drive-connection-status" class="dashboard-notice" role="status"${driveNotice ? "" : " hidden"}>${escapeHtml(driveNotice)}</p><form id="search-form" class="admin-search"><input name="code" value="${escapeHtml(query)}" pattern="MP-[A-HJ-NP-Z2-9]{5}" placeholder="MP-A42K7" aria-label="Quote code"><button class="button button-primary" type="submit">Find quote</button>${query ? '<button class="button button-secondary" id="show-all" type="button">Show newest</button>' : ""}</form><section class="estimate-list">${estimates.length ? estimates.map(estimateMarkup).join("") : '<div class="empty-state">No matching estimates found.</div>'}</section></div>`;
     document.querySelector("#sign-out").addEventListener("click", async () => { await client.auth.signOut(); renderLogin(); });
+    document.querySelector("#connect-drive").addEventListener("click", connectDrive);
     document.querySelector("#search-form").addEventListener("submit", (event) => { event.preventDefault(); loadEstimates(new FormData(event.currentTarget).get("code")); });
     document.querySelector("#show-all")?.addEventListener("click", () => loadEstimates());
     document.querySelectorAll("[data-copy]").forEach((button) => button.addEventListener("click", async () => { await navigator.clipboard.writeText(button.dataset.copy); button.textContent = "Copied"; }));
     document.querySelectorAll("[data-status]").forEach((button) => button.addEventListener("click", () => updateStatus(button.dataset.id, button.dataset.status, button)));
     document.querySelectorAll("[data-file]").forEach((button) => button.addEventListener("click", () => openFile(button.dataset.file, button)));
+  }
+
+  async function connectDrive(event) {
+    const button = event.currentTarget;
+    const status = document.querySelector("#drive-connection-status");
+    button.disabled = true; status.hidden = false; status.textContent = "Opening Google authorization…";
+    const { data:{ session } } = await client.auth.getSession();
+    if (!session) { status.textContent = "Sign in again before connecting Google Drive."; button.disabled = false; return; }
+    try {
+      const response = await fetch("/api/google-drive-connect", {
+        method:"POST", headers:{ Authorization:`Bearer ${session.access_token}` }
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.authorizationUrl) throw new Error(payload.error || "Google Drive connection could not be started.");
+      window.location.assign(payload.authorizationUrl);
+    } catch (error) {
+      status.textContent = error.message || "Google Drive connection could not be started.";
+      button.disabled = false;
+    }
   }
 
   function estimateMarkup(estimate) {

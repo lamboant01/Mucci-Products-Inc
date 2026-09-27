@@ -7,20 +7,44 @@ const MIME_TYPES = {
   step:"application/step", stp:"application/step"
 };
 
-function configuration() {
+function oauthConfiguration() {
   const values = {
     clientId:process.env.GOOGLE_DRIVE_CLIENT_ID,
     clientSecret:process.env.GOOGLE_DRIVE_CLIENT_SECRET,
-    refreshToken:process.env.GOOGLE_DRIVE_REFRESH_TOKEN,
-    folderId:process.env.GOOGLE_DRIVE_FOLDER_ID
+    redirectUri:process.env.GOOGLE_DRIVE_REDIRECT_URI
   };
-  const missing = Object.entries(values).filter(([, value]) => !value).map(([name]) => name);
+  const missing = [
+    ["GOOGLE_DRIVE_CLIENT_ID", values.clientId],
+    ["GOOGLE_DRIVE_CLIENT_SECRET", values.clientSecret],
+    ["GOOGLE_DRIVE_REDIRECT_URI", values.redirectUri]
+  ].filter(([, value]) => !value).map(([name]) => name);
   if (missing.length) {
     const error = new Error(`Google Drive is not configured: ${missing.join(", ")}.`);
     error.statusCode = 503;
     throw error;
   }
   return values;
+}
+
+function configuration(storedRefreshToken) {
+  const values = {
+    ...oauthConfiguration(),
+    refreshToken:process.env.GOOGLE_DRIVE_REFRESH_TOKEN || storedRefreshToken,
+    folderId:process.env.GOOGLE_DRIVE_FOLDER_ID
+  };
+  const missing = [];
+  if (!values.refreshToken) missing.push("a connected Google Drive account");
+  if (!values.folderId) missing.push("GOOGLE_DRIVE_FOLDER_ID");
+  if (missing.length) {
+    const error = new Error(`Google Drive is not configured: ${missing.join(", ")}.`);
+    error.statusCode = 503;
+    throw error;
+  }
+  return values;
+}
+
+function oauthClient(config) {
+  return new OAuth2Client(config.clientId, config.clientSecret, config.redirectUri);
 }
 
 function fileName(value, quoteCode) {
@@ -34,7 +58,7 @@ function contentType(name) {
 }
 
 async function accessToken(config) {
-  const client = new OAuth2Client(config.clientId, config.clientSecret);
+  const client = oauthClient(config);
   client.setCredentials({ refresh_token:config.refreshToken });
   const result = await client.getAccessToken();
   const token = typeof result === "string" ? result : result && result.token;
@@ -86,4 +110,4 @@ async function uploadModel(config, model) {
   return uploadWithAccessToken(await accessToken(config), config, model);
 }
 
-module.exports = { configuration, contentType, fileName, uploadModel, uploadWithAccessToken };
+module.exports = { configuration, oauthConfiguration, oauthClient, contentType, fileName, uploadModel, uploadWithAccessToken };

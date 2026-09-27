@@ -2,6 +2,7 @@
 
 const { normalizeQuoteCode } = require("./_estimate-email");
 const drive = require("./_google-drive");
+const connection = require("./_google-drive-connection");
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const SELECT_COLUMNS = "quote_code,notification_token,original_file_name,file_path,drive_file_id,drive_web_view_link";
@@ -13,17 +14,6 @@ function requestBody(req) {
     catch (_) { return {}; }
   }
   return {};
-}
-
-function supabaseConfiguration() {
-  const supabaseUrl = String(process.env.SUPABASE_URL || "").replace(/\/$/, "");
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) {
-    const error = new Error("Supabase server configuration is missing.");
-    error.statusCode = 503;
-    throw error;
-  }
-  return { supabaseUrl, serviceKey };
 }
 
 function headers(serviceKey, extra = {}) {
@@ -77,8 +67,8 @@ module.exports = async function handler(req, res) {
     const quoteCode = normalizeQuoteCode(body.quoteCode);
     const notificationToken = String(body.notificationToken || "").toLowerCase();
     if (!quoteCode || !UUID_PATTERN.test(notificationToken)) return res.status(400).json({ error:"Invalid Drive mirror request." });
-    const supabase = supabaseConfiguration();
-    const driveConfig = drive.configuration();
+    const supabase = connection.supabaseConfiguration();
+    const driveConfig = drive.configuration(await connection.storedRefreshToken(supabase));
     const estimate = await findEstimate(supabase, quoteCode, notificationToken);
     if (!estimate || !estimate.file_path || estimate.drive_file_id) return res.status(202).json({ accepted:true });
     const bytes = await downloadModel(supabase, estimate.file_path);
