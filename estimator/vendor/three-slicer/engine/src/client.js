@@ -20,7 +20,7 @@ export { SLA_CAPABILITIES, SLA_JOB_VERSION, SlaRequestError } from './sla_reques
 // Which reply type ends which command. A slice has no cmd (that is what selects slicing) and ends on 'done'.
 const REPLY_OF = {
   warmup: 'warm', prepare: 'prepared', paint: 'painted', erase: 'painted', clear: 'painted',
-  importPaint: 'painted', exportPaint: 'paintExport', overlay: 'overlay', slice: 'done', sla: 'done',
+  importPaint: 'painted', exportPaint: 'paintExport', overlay: 'overlay', slice: 'done', sliceStats: 'done', sla: 'done',
   fillPreview: 'fillPreview', paintMode: 'paintMode',
 }
 
@@ -45,10 +45,10 @@ const slaTransferables = (job) => job.objects.flatMap(object => [object, ...(obj
  * `three-slicer/viewer` binds it. Written as the full literal expression for the same reason as below.
  */
 export function makeSlicerWorker() {
-  return new Worker(new URL('./slicer.worker.js', import.meta.url), { type: 'module' })
+  return new Worker(new URL('./slicer.worker.js?v=stats-only-time-v1', import.meta.url), { type: 'module' })
 }
 
-export function createSlicerClient(worker = new Worker(new URL('./slicer.worker.js', import.meta.url), { type: 'module' })) {
+export function createSlicerClient(worker = new Worker(new URL('./slicer.worker.js?v=stats-only-time-v1', import.meta.url), { type: 'module' })) {
   const pending = []          // FIFO of {expect, resolve, reject, onProgress, onLayer, chunks, layers}
   let cancelFlag = null       // Uint32Array over the worker's SharedArrayBuffer — mt kernel only
   let closed = false
@@ -114,6 +114,19 @@ export function createSlicerClient(worker = new Worker(new URL('./slicer.worker.
       //  took those itself, hand back the same shape a batch slice produces.
       if (!reply.assembled) return result
       return { ...result, gcode: reply.assembled.gcode, layers: reply.assembled.layers }
+    },
+
+    /**
+     * Run a non-streamed slice inside the worker and return only its statistics.
+     * The kernel's full print-time engine is disabled during layer streaming,
+     * so estimator clients that need an exact time can use this without copying
+     * the generated G-code and preview paths back to the main thread.
+     */
+    async sliceStats(stl, params, { onProgress } = {}) {
+      const buffer = asBuffer(stl)
+      const entry = { cmd: 'sliceStats', stl: buffer, params: typeof params === 'string' ? params : JSON.stringify(params ?? {}) }
+      const reply = await send(entry, { transfer: [buffer], onProgress })
+      return reply.result ?? {}
     },
 
     /**

@@ -362,27 +362,36 @@ self.onmessage = async (e) => {
           reply({ type: 'supsab', buf: v.buffer, ptr: v.byteOffset, cancelPtr: c?.byteOffset ?? 0 })
       } catch {}
     }
-    // Default: slice. Register the layer sink -> the kernel calls back per layer (z, idx, gcodeChunk, pathsF32, widthsF32).
-    //  Each layer is transferred to main immediately (toolpath buffers moved) -> the worker copy is freed -> heap headroom before the next layer.
+    // Default: slice. Normal slices stream layers to minimize memory. A
+    // sliceStats request deliberately uses batch mode because the kernel's
+    // full print-time engine is disabled while streaming; only its small stats
+    // object is returned to the main thread.
+    const statsOnly = d.cmd === 'sliceStats'
     const onProgress = (done, total) => reply({ type: 'progress', done, total })
-    Module.set_layer_sink((z, idx, gcode, paths, widths) => {
-      const transfer = []
-      if (paths && paths.buffer) transfer.push(paths.buffer)     // economy mode yields empty arrays (no .buffer) -> nothing to transfer
-      if (widths && widths.buffer) transfer.push(widths.buffer)
-      reply({ type: 'layer', z, idx, gcode, paths, widths }, transfer)
-    })
+    if (!statsOnly) {
+      Module.set_layer_sink((z, idx, gcode, paths, widths) => {
+        const transfer = []
+        if (paths && paths.buffer) transfer.push(paths.buffer)     // economy mode yields empty arrays (no .buffer) -> nothing to transfer
+        if (widths && widths.buffer) transfer.push(widths.buffer)
+        reply({ type: 'layer', z, idx, gcode, paths, widths }, transfer)
+      })
+    }
     let r
     // Timed around the kernel call INCLUDING the layer sink, which posts each layer to the main thread from inside
     //  it — that transfer is part of what a streamed slice costs and leaving it out would flatter the number.
     const started = performance.now()
     try { r = Module.slice(new Uint8Array(d.stl), paramsText(d.params), onProgress) }
-    finally { Module.clear_layer_sink() }
+    finally { if (!statsOnly) Module.clear_layer_sink() }
     if (r && r.error) { reply({ type: 'error', error: String(r.error) }); return }
     // streamed=true -> g-code/layers were already emitted as 'layer' (result holds stats only). batch/MM keep them in result.
     // withSliceWarnings names what the slice got away with (an off-bed model) on the result itself, and
     //  withSliceThroughput how fast it ran — the raw protocol carries both, so createSlicerClient's callers get
     //  them without the client having to re-derive anything.
-    reply({ type: 'done', result: withSliceThroughput(withSliceWarnings(r), performance.now() - started) })
+    const result = withSliceThroughput(withSliceWarnings(r), performance.now() - started)
+    reply({
+      type: 'done',
+      result:statsOnly ? { stats:result.stats, warnings:result.warnings, throughput:result.throughput } : result
+    })
   } catch (err) {
     // Includes the WASM abort("memory access out of bounds") — the main thread's OOM ladder decides on re-creation / economy retry.
     const errorReply = { type: 'error', error: String((err && err.message) || err) }

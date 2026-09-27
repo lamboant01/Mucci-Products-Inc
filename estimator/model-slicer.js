@@ -4,7 +4,7 @@ import { STLLoader } from "https://esm.sh/three@0.180.0/examples/jsm/loaders/STL
 import { OBJLoader } from "https://esm.sh/three@0.180.0/examples/jsm/loaders/OBJLoader.js";
 import { ThreeMFLoader } from "https://esm.sh/three@0.180.0/examples/jsm/loaders/3MFLoader.js";
 import { STLExporter } from "https://esm.sh/three@0.180.0/examples/jsm/exporters/STLExporter.js";
-import { createSlicerClient } from "./vendor/three-slicer/engine/src/client.js";
+import { createSlicerClient } from "./vendor/three-slicer/engine/src/client.js?v=stats-only-time-v1";
 import { SLICER_PROFILES } from "./slicer-config.js";
 import { filamentGrams } from "./filament-math.mjs";
 import { slicerFilamentLength, slicerTimeSeconds } from "./slicer-result.mjs";
@@ -142,7 +142,7 @@ export async function sliceModel(model, profileName, onProgress) {
       onProgress?.({ stage:"Loading slicer" });
       await client.warmup();
       onProgress?.({ stage:"Slicing model" });
-      return client.slice(model.binaryStl.slice(0), process, {
+      return client.sliceStats(model.binaryStl.slice(0), process, {
         onProgress(done, total) {
           onProgress?.({ stage:`Slicing model (${Math.round(done / Math.max(total, 1) * 100)}%)` });
         }
@@ -159,8 +159,8 @@ export async function sliceModel(model, profileName, onProgress) {
     const materialGrams = filamentGrams(filamentLengthMm);
     const seconds = slicerTimeSeconds(result, globalThis.MucciGcodeTime?.parse);
     if (!seconds) throw new Error("The slicer produced toolpaths but did not return a print-time estimate.");
-    onProgress?.({ stage:"G-code ready" });
-    return { gcode:typeof result.gcode === "string" ? result.gcode : "", seconds, filamentLengthMm, filamentGrams:materialGrams };
+    onProgress?.({ stage:"Estimate ready" });
+    return { gcode:"", seconds, filamentLengthMm, filamentGrams:materialGrams };
   } finally {
     if (timeoutId) window.clearTimeout(timeoutId);
     client.terminate();
