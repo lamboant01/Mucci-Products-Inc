@@ -39,7 +39,7 @@ module.exports = async function handler(req, res) {
       console.warn("Admin authentication failed:", auth.authorizationFailureReason(session.user, config));
       auth.clearSession(res);
       auth.clearOAuthCookies(res);
-      return auth.notFound(res);
+      return res.redirect(303, `${config.siteUrl}/admin?auth=denied`);
     }
     auth.setSession(res, session);
     auth.clearOAuthCookies(res);

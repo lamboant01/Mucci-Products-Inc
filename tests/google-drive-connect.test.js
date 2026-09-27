@@ -20,13 +20,15 @@ test("creates an offline Drive authorization URL only for the administrator", { 
     SUPABASE_ANON_KEY:"anon-test",
     SUPABASE_SERVICE_ROLE_KEY:"service-role-test",
     PUBLIC_SITE_URL:"https://mucciproducts.com",
-    ADMIN_USER_ID:"123e4567-e89b-42d3-a456-426614174000",
+    ADMIN_EMAIL:"owner@example.test",
     GOOGLE_DRIVE_CLIENT_ID:"client.apps.googleusercontent.com",
     GOOGLE_DRIVE_CLIENT_SECRET:"client-secret",
     GOOGLE_DRIVE_REDIRECT_URI:"https://mucciproducts.com/api/google-drive-callback"
   });
   global.fetch = async () => new Response(JSON.stringify({
     id:"123e4567-e89b-42d3-a456-426614174000",
+    email:"owner@example.test",
+    email_confirmed_at:"2026-01-01T00:00:00Z",
     app_metadata:{ provider:"google", providers:["google"] },
     identities:[{ provider:"google" }]
   }), {

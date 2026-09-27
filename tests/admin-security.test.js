@@ -18,7 +18,6 @@ function environment(overrides = {}) {
     SUPABASE_ANON_KEY:"anon-test",
     SUPABASE_SERVICE_ROLE_KEY:"service-test",
     PUBLIC_SITE_URL:"https://mucciproducts.com",
-    ADMIN_USER_ID:ADMIN_ID,
     ADMIN_EMAIL:"owner@example.test",
     ...overrides
   };
@@ -68,23 +67,24 @@ test("same-origin validation supports browsers with unavailable Origin headers w
   assert.equal(auth.requestIsSameOrigin({ headers:{ host:"attacker.example", "x-forwarded-proto":"https" } }, config), false);
 });
 
-test("authorization requires Google as primary provider and the exact configured UUID", () => {
-  const config = { adminUserId:ADMIN_ID, adminEmail:"owner@example.test" };
+test("authorization requires the exact verified approved email with a linked Google identity", () => {
+  const config = { adminEmail:"owner@example.test" };
   assert.equal(auth.authorizeUser(googleUser(), config), true);
-  assert.equal(auth.authorizeUser(googleUser({ id:"223e4567-e89b-42d3-a456-426614174000" }), config), false);
-  assert.equal(auth.authorizeUser(googleUser({ app_metadata:{ provider:"email", providers:["email", "google"] } }), config), false);
+  assert.equal(auth.authorizeUser(googleUser({ id:"223e4567-e89b-42d3-a456-426614174000" }), config), true);
+  assert.equal(auth.authorizeUser(googleUser({ app_metadata:{ provider:"email", providers:["email", "google"] } }), config), true);
   assert.equal(auth.authorizeUser(googleUser({ identities:[{ provider:"email" }] }), config), false);
+  assert.equal(auth.authorizeUser(googleUser({ id:"223e4567-e89b-42d3-a456-426614174000", email:"other@example.test" }), config), false);
   assert.equal(auth.authorizationFailureReason(googleUser({ identities:[{ provider:"email" }] }), config), "google_provider_invalid");
-  assert.equal(auth.authorizationFailureReason(googleUser({ id:"223e4567-e89b-42d3-a456-426614174000" }), config), "admin_user_id_mismatch");
+  assert.equal(auth.authorizationFailureReason(googleUser({ id:"223e4567-e89b-42d3-a456-426614174000", email:"other@example.test" }), config), "admin_email_mismatch");
 });
 
-test("email bootstrap works only for a verified Google identity and stops when UUID is set", () => {
-  const bootstrap = { adminUserId:"", adminEmail:"owner@example.test" };
-  assert.equal(auth.authorizeUser(googleUser(), bootstrap), true);
-  assert.equal(auth.authorizeUser(googleUser({ email_confirmed_at:null, user_metadata:{} }), bootstrap), false);
-  assert.equal(auth.authorizeUser(googleUser({ email:"other@example.test" }), bootstrap), false);
-  assert.equal(auth.authorizationFailureReason(googleUser({ email:"other@example.test" }), bootstrap), "admin_email_mismatch");
-  assert.equal(auth.authorizeUser(googleUser({ email:"other@example.test" }), { adminUserId:ADMIN_ID, adminEmail:"owner@example.test" }), true);
+test("only the verified approved email authorizes the administrator", () => {
+  const config = { adminEmail:"owner@example.test" };
+  assert.equal(auth.authorizeUser(googleUser(), config), true);
+  assert.equal(auth.authorizeUser(googleUser({ email_confirmed_at:null, user_metadata:{} }), config), false);
+  assert.equal(auth.authorizeUser(googleUser({ email:"other@example.test" }), config), false);
+  assert.equal(auth.authorizationFailureReason(googleUser({ email_confirmed_at:null, user_metadata:{} }), config), "admin_email_unverified");
+  assert.equal(auth.authorizationFailureReason(googleUser({ email:"other@example.test" }), config), "admin_email_mismatch");
 });
 
 test("the unauthenticated admin page offers Google sign-in without granting dashboard access", { concurrency:false }, async (context) => {
@@ -136,7 +136,7 @@ test("recoverable OAuth callback failures return to a safe retry page", { concur
   assert.doesNotMatch(page.body, /expired-code/);
 });
 
-test("authorized Google UUID receives the private page and an unauthorized Google UUID receives 404", { concurrency:false }, async (context) => {
+test("authorized administrator receives the private page and an unapproved Google identity receives 404", { concurrency:false }, async (context) => {
   const originalFetch = global.fetch;
   const original = { ...process.env };
   context.after(() => { global.fetch = originalFetch; process.env = original; });
@@ -149,7 +149,7 @@ test("authorized Google UUID receives the private page and an unauthorized Googl
   assert.match(allowed.body, /Google 2-Step Verification or a passkey/);
   assert.equal(allowed.headers["X-Robots-Tag"], "noindex, nofollow, noarchive, nosnippet");
 
-  global.fetch = async () => new Response(JSON.stringify(googleUser({ id:"223e4567-e89b-42d3-a456-426614174000" })), { status:200, headers:{ "Content-Type":"application/json" } });
+  global.fetch = async () => new Response(JSON.stringify(googleUser({ id:"223e4567-e89b-42d3-a456-426614174000", email:"other@example.test" })), { status:200, headers:{ "Content-Type":"application/json" } });
   const denied = responseRecorder();
   await adminPage({ method:"GET", query:{ section:"security" }, headers:{ cookie:"mucci_sb_admin_access=other-session" } }, denied);
   assert.equal(denied.statusCode, 404);
@@ -230,20 +230,26 @@ test("OAuth callback logs only a safe token-exchange failure reason", { concurre
   assert.doesNotMatch(JSON.stringify(warnings), /sensitive-code|sensitive-verifier/);
 });
 
-test("an unauthorized Google identity still receives a generic 404", { concurrency:false }, async (context) => {
+test("an unauthorized Google identity returns a safe denied screen", { concurrency:false }, async (context) => {
   const originalFetch = global.fetch;
   const original = { ...process.env };
   context.after(() => { global.fetch = originalFetch; process.env = original; });
   Object.assign(process.env, environment());
   global.fetch = async () => new Response(JSON.stringify({
     access_token:"access", refresh_token:"refresh", expires_in:3600,
-    user:googleUser({ id:"223e4567-e89b-42d3-a456-426614174000" })
+    user:googleUser({ id:"223e4567-e89b-42d3-a456-426614174000", email:"other@example.test" })
   }), { status:200, headers:{ "Content-Type":"application/json" } });
 
   const response = responseRecorder();
   await authCallback({ method:"GET", query:{ code:"oauth-code" }, headers:{ cookie:"mucci_admin_pkce=verifier" } }, response);
-  assert.equal(response.statusCode, 404);
-  assert.doesNotMatch(String(response.body), /Google|administrator|retry/i);
+  assert.equal(response.statusCode, 303);
+  assert.equal(response.headers.Location, "https://mucciproducts.com/admin?auth=denied");
+
+  const page = responseRecorder();
+  await adminPage({ method:"GET", query:{ auth:"denied" }, headers:{} }, page);
+  assert.equal(page.statusCode, 200);
+  assert.match(page.body, /This Google account is not authorized/);
+  assert.doesNotMatch(page.body, /other@example\.test/);
 });
 
 test("unauthenticated management APIs return 404 instead of revealing authorization state", { concurrency:false }, async (context) => {
@@ -261,7 +267,7 @@ test("authenticated but unauthorized management API calls also return 404", { co
   const original = { ...process.env };
   context.after(() => { global.fetch = originalFetch; process.env = original; });
   Object.assign(process.env, environment());
-  global.fetch = async () => new Response(JSON.stringify(googleUser({ id:"223e4567-e89b-42d3-a456-426614174000" })), { status:200, headers:{ "Content-Type":"application/json" } });
+  global.fetch = async () => new Response(JSON.stringify(googleUser({ id:"223e4567-e89b-42d3-a456-426614174000", email:"other@example.test" })), { status:200, headers:{ "Content-Type":"application/json" } });
   const res = responseRecorder();
   await adminCards({ method:"POST", headers:{ origin:"https://mucciproducts.com", cookie:"mucci_sb_admin_access=wrong-user-session" }, body:{ action:"list" } }, res);
   assert.equal(res.statusCode, 404);

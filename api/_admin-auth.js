@@ -14,12 +14,10 @@ function configuration() {
     anonKey:process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
     serviceKey:process.env.SUPABASE_SERVICE_ROLE_KEY,
     siteUrl:String(process.env.PUBLIC_SITE_URL || "https://mucciproducts.com").replace(/\/$/, ""),
-    adminEmail:String(process.env.ADMIN_EMAIL || "").trim().toLowerCase(),
-    adminUserId:String(process.env.ADMIN_USER_ID || "").trim().toLowerCase()
+    adminEmail:String(process.env.ADMIN_EMAIL || "").trim().toLowerCase()
   };
   if (!values.supabaseUrl || !values.anonKey || !values.serviceKey) throw configurationError("Supabase server configuration is missing.");
-  if (values.adminUserId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(values.adminUserId)) throw configurationError("ADMIN_USER_ID is invalid.");
-  if (!values.adminUserId && !values.adminEmail) throw configurationError("ADMIN_EMAIL is required until ADMIN_USER_ID is configured.");
+  if (!values.adminEmail) throw configurationError("ADMIN_EMAIL is required.");
   return values;
 }
 
@@ -112,10 +110,9 @@ function openOAuthState(config, token, now = Date.now()) {
 }
 
 function providerIsGoogle(user) {
-  const primary = String(user?.app_metadata?.provider || "");
   const providers = Array.isArray(user?.app_metadata?.providers) ? user.app_metadata.providers.map(String) : [];
   const identities = Array.isArray(user?.identities) ? user.identities : [];
-  return primary === "google" && providers.includes("google") && identities.some((identity) => identity?.provider === "google");
+  return providers.includes("google") && identities.some((identity) => identity?.provider === "google");
 }
 
 function emailIsVerified(user) {
@@ -124,14 +121,13 @@ function emailIsVerified(user) {
 
 function authorizeUser(user, config) {
   if (!user?.id || !providerIsGoogle(user)) return false;
-  if (config.adminUserId) return String(user.id).toLowerCase() === config.adminUserId;
   return emailIsVerified(user) && String(user.email || "").trim().toLowerCase() === config.adminEmail;
 }
 
 function authorizationFailureReason(user, config) {
   if (!user?.id || !providerIsGoogle(user)) return "google_provider_invalid";
-  if (config.adminUserId && String(user.id).toLowerCase() !== config.adminUserId) return "admin_user_id_mismatch";
-  if (!config.adminUserId && (!emailIsVerified(user) || String(user.email || "").trim().toLowerCase() !== config.adminEmail)) return "admin_email_mismatch";
+  if (!emailIsVerified(user)) return "admin_email_unverified";
+  if (String(user.email || "").trim().toLowerCase() !== config.adminEmail) return "admin_email_mismatch";
   return "authorization_failed";
 }
 
@@ -177,7 +173,7 @@ async function authenticateAdmin(req, res, suppliedConfig) {
     clearSession(res);
     return { status:"unauthorized", config, user, reason:authorizationFailureReason(user, config) };
   }
-  return { status:"authorized", config, user, accessToken, refreshToken, bootstrap:!config.adminUserId };
+  return { status:"authorized", config, user, accessToken, refreshToken };
 }
 
 function requestQuery(req) {
