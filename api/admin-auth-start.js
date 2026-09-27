@@ -12,7 +12,6 @@ module.exports = async function handler(req, res) {
   if (req.method !== "POST") return auth.notFound(res);
   try {
     const config = auth.configuration();
-    if (!auth.requestIsSameOrigin(req, config)) return auth.notFound(res);
     const cookies = auth.cookieMap(req);
     const returnValue = String(cookies[auth.RETURN_COOKIE] || "");
     const [slug] = returnValue.split("/");

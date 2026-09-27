@@ -105,6 +105,21 @@ test("wrong private route returns a generic 404 while the correct unauthenticate
   assert.match(String(correct.headers["Set-Cookie"]), /HttpOnly; Secure; SameSite=Lax; Path=\/api/);
 });
 
+test("OAuth start uses the private SameSite return cookie even when browser origin headers are unavailable", { concurrency:false }, async (context) => {
+  const original = { ...process.env };
+  context.after(() => { process.env = original; });
+  Object.assign(process.env, environment());
+
+  const allowed = responseRecorder();
+  await authStart({ method:"POST", headers:{ origin:"null", cookie:`mucci_admin_return=${SLUG}%2Festimates` } }, allowed);
+  assert.equal(allowed.statusCode, 303);
+  assert.match(String(allowed.headers.Location), /\/auth\/v1\/authorize\?/);
+
+  const missingCookie = responseRecorder();
+  await authStart({ method:"POST", headers:{} }, missingCookie);
+  assert.equal(missingCookie.statusCode, 404);
+});
+
 test("authorized Google UUID receives the private page and an unauthorized Google UUID receives 404", { concurrency:false }, async (context) => {
   const originalFetch = global.fetch;
   const original = { ...process.env };
