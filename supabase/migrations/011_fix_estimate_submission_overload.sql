@@ -1,19 +1,20 @@
--- Preserve the customer-facing filename and issue a private, single-estimate
--- notification token. Email credentials remain in the server environment.
+-- Separate the legacy 14-argument implementation from the public 15-argument
+-- RPC. The public function's optional final argument otherwise makes a
+-- 14-argument call ambiguous in PostgreSQL.
 
-alter table public.print_estimates
-  add column if not exists original_file_name text
-  check (original_file_name is null or char_length(original_file_name) between 1 and 255);
-
-alter table public.print_estimates
-  add column if not exists notification_token uuid not null default gen_random_uuid();
-
-alter table public.print_estimates
-  add column if not exists email_notification_sent_at timestamptz;
-
-alter function public.submit_print_estimate(
-  text,text,integer,integer,integer,numeric,text,text,text,boolean,text,text,text,text
-) rename to submit_print_estimate_core;
+do $$
+begin
+  if to_regprocedure(
+    'public.submit_print_estimate(text,text,integer,integer,integer,numeric,text,text,text,boolean,text,text,text,text)'
+  ) is not null and to_regprocedure(
+    'public.submit_print_estimate_core(text,text,integer,integer,integer,numeric,text,text,text,boolean,text,text,text,text)'
+  ) is null then
+    execute 'alter function public.submit_print_estimate(
+      text,text,integer,integer,integer,numeric,text,text,text,boolean,text,text,text,text
+    ) rename to submit_print_estimate_core';
+  end if;
+end;
+$$;
 
 revoke all on function public.submit_print_estimate_core(
   text,text,integer,integer,integer,numeric,text,text,text,boolean,text,text,text,text
@@ -60,5 +61,9 @@ begin
 end;
 $$;
 
-revoke all on function public.submit_print_estimate(text,text,integer,integer,integer,numeric,text,text,text,boolean,text,text,text,text,text) from public;
-grant execute on function public.submit_print_estimate(text,text,integer,integer,integer,numeric,text,text,text,boolean,text,text,text,text,text) to anon, authenticated;
+revoke all on function public.submit_print_estimate(
+  text,text,integer,integer,integer,numeric,text,text,text,boolean,text,text,text,text,text
+) from public;
+grant execute on function public.submit_print_estimate(
+  text,text,integer,integer,integer,numeric,text,text,text,boolean,text,text,text,text,text
+) to anon, authenticated;

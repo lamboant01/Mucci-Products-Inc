@@ -31,7 +31,7 @@ on the pinned Three.js and OCCT browser modules. The AGPL Three Slicer engine,
 its licence, and its third-party notices are kept under
 `estimator/vendor/three-slicer/` so the worker does not depend on a remote path.
 
-Run migrations 004 through 010 in order after migrations 001 through 003. All
+Run migrations 004 through 011 in order after migrations 001 through 003. All
 private pricing values and fallback-time assumptions are centralized in
 the single-row `print_estimator_config` table created by that migration. Update
 that row in Supabase to change pricing without editing the public website.
