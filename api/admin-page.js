@@ -15,10 +15,11 @@ function page({ title, body, scripts = [], authenticated = false, basePath = "" 
   return `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive,nosnippet"><title>${escapeHtml(title)} | Mucci Products</title><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/cards.css"><link rel="stylesheet" href="/assets/management.css"></head><body class="cards-page"><main class="dashboard-shell${authenticated ? " admin-layout" : ""}">${navigation}<div class="admin-main">${body}</div></main>${scriptTags}</body></html>`;
 }
 
-function loginPage() {
+function loginPage(showRetry = false) {
+  const retryNotice = showRetry ? '<div class="dashboard-notice auth-retry" role="alert"><strong>Sign-in could not be completed.</strong><p>Start again from this page in the same browser. Authorization links expire quickly and cannot be reused.</p></div>' : "";
   return page({
     title:"Sign in",
-    body:'<section class="management-login"><img src="/assets/mucci-products-logo.png" alt="Mucci Products"><p class="eyebrow">Restricted administration</p><h1>Admin sign in</h1><p>Use the authorized Google account to continue.</p><form method="post" action="/api/admin-auth-start"><button class="button button-primary google-sign-in" type="submit">Sign in with Google</button></form></section>'
+    body:`<section class="management-login"><img src="/assets/mucci-products-logo.png" alt="Mucci Products"><p class="eyebrow">Restricted administration</p><h1>Admin sign in</h1>${retryNotice}<p>Use the authorized Google account to continue.</p><form method="post" action="/api/admin-auth-start"><button class="button button-primary google-sign-in" type="submit">Sign in with Google</button></form></section>`
   });
 }
 
@@ -52,7 +53,7 @@ module.exports = async function handler(req, res) {
     }
     if (result.status === "unauthenticated") {
       auth.appendCookies(res, [auth.cookie(auth.LOGIN_COOKIE, "1", 600, "/api/admin-auth-start")]);
-      return res.status(200).send(loginPage());
+      return res.status(200).send(loginPage(values.auth === "retry"));
     }
     const scripts = requestedSection === "cards"
       ? ["/config.js", "/card-core.js", "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js", "/assets/management-cards.js"]

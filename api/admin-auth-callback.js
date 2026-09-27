@@ -12,11 +12,13 @@ module.exports = async function handler(req, res) {
     const verifier = cookies[auth.PKCE_COOKIE];
     if (!values.code) {
       console.warn("Admin authentication failed:", "missing_oauth_code");
-      return auth.notFound(res);
+      auth.clearOAuthCookies(res);
+      return res.redirect(303, `${config.siteUrl}/admin?auth=retry`);
     }
     if (!verifier) {
       console.warn("Admin authentication failed:", "missing_pkce_cookie");
-      return auth.notFound(res);
+      auth.clearOAuthCookies(res);
+      return res.redirect(303, `${config.siteUrl}/admin?auth=retry`);
     }
 
     const response = await fetch(`${config.supabaseUrl}/auth/v1/token?grant_type=pkce`, {
@@ -27,7 +29,8 @@ module.exports = async function handler(req, res) {
     });
     if (!response.ok) {
       console.warn("Admin authentication failed:", "token_exchange_failed");
-      return auth.notFound(res);
+      auth.clearOAuthCookies(res);
+      return res.redirect(303, `${config.siteUrl}/admin?auth=retry`);
     }
     const session = await response.json();
     if (!auth.authorizeUser(session.user, config)) {
@@ -41,6 +44,12 @@ module.exports = async function handler(req, res) {
     return res.redirect(303, `${config.siteUrl}/admin`);
   } catch {
     console.warn("Admin authentication failed:", "oauth_callback_failed");
-    return auth.notFound(res);
+    try {
+      const config = auth.configuration();
+      auth.clearOAuthCookies(res);
+      return res.redirect(303, `${config.siteUrl}/admin?auth=retry`);
+    } catch {
+      return auth.notFound(res);
+    }
   }
 };

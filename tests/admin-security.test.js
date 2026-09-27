@@ -110,10 +110,30 @@ test("OAuth start requires the SameSite login marker even when browser origin he
   await authStart({ method:"POST", headers:{ origin:"null", "sec-fetch-site":"same-origin", cookie:"mucci_admin_login=1" } }, allowed);
   assert.equal(allowed.statusCode, 303);
   assert.match(String(allowed.headers.Location), /\/auth\/v1\/authorize\?/);
+  assert.match(String(allowed.headers["Set-Cookie"]), /mucci_admin_pkce=.*Path=\/;/);
 
   const missingCookie = responseRecorder();
   await authStart({ method:"POST", headers:{ "sec-fetch-site":"same-origin" } }, missingCookie);
   assert.equal(missingCookie.statusCode, 404);
+});
+
+test("recoverable OAuth callback failures return to a safe retry page", { concurrency:false }, async (context) => {
+  const original = { ...process.env };
+  context.after(() => { process.env = original; });
+  Object.assign(process.env, environment());
+
+  const callback = responseRecorder();
+  await authCallback({ method:"GET", query:{ code:"expired-code" }, headers:{} }, callback);
+  assert.equal(callback.statusCode, 303);
+  assert.equal(callback.headers.Location, "https://mucciproducts.com/admin?auth=retry");
+  assert.match(String(callback.headers["Set-Cookie"]), /mucci_admin_pkce=;.*Path=\/;.*Max-Age=0/);
+
+  const page = responseRecorder();
+  await adminPage({ method:"GET", query:{ auth:"retry" }, headers:{} }, page);
+  assert.equal(page.statusCode, 200);
+  assert.match(page.body, /Sign-in could not be completed/);
+  assert.match(page.body, /same browser/);
+  assert.doesNotMatch(page.body, /expired-code/);
 });
 
 test("authorized Google UUID receives the private page and an unauthorized Google UUID receives 404", { concurrency:false }, async (context) => {
@@ -177,9 +197,26 @@ test("OAuth callback logs only a safe token-exchange failure reason", { concurre
   const response = responseRecorder();
   await authCallback({ method:"GET", query:{ code:"sensitive-code" }, headers:{ cookie:"mucci_admin_pkce=sensitive-verifier" } }, response);
 
-  assert.equal(response.statusCode, 404);
+  assert.equal(response.statusCode, 303);
+  assert.equal(response.headers.Location, "https://mucciproducts.com/admin?auth=retry");
   assert.deepEqual(warnings, [["Admin authentication failed:", "token_exchange_failed"]]);
   assert.doesNotMatch(JSON.stringify(warnings), /sensitive-code|sensitive-verifier/);
+});
+
+test("an unauthorized Google identity still receives a generic 404", { concurrency:false }, async (context) => {
+  const originalFetch = global.fetch;
+  const original = { ...process.env };
+  context.after(() => { global.fetch = originalFetch; process.env = original; });
+  Object.assign(process.env, environment());
+  global.fetch = async () => new Response(JSON.stringify({
+    access_token:"access", refresh_token:"refresh", expires_in:3600,
+    user:googleUser({ id:"223e4567-e89b-42d3-a456-426614174000" })
+  }), { status:200, headers:{ "Content-Type":"application/json" } });
+
+  const response = responseRecorder();
+  await authCallback({ method:"GET", query:{ code:"oauth-code" }, headers:{ cookie:"mucci_admin_pkce=verifier" } }, response);
+  assert.equal(response.statusCode, 404);
+  assert.doesNotMatch(String(response.body), /Google|administrator|retry/i);
 });
 
 test("unauthenticated management APIs return 404 instead of revealing authorization state", { concurrency:false }, async (context) => {

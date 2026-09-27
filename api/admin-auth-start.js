@@ -24,7 +24,9 @@ module.exports = async function handler(req, res) {
 
     const verifier = base64url(crypto.randomBytes(48));
     const challenge = base64url(crypto.createHash("sha256").update(verifier).digest());
-    auth.appendCookies(res, [auth.cookie(auth.PKCE_COOKIE, verifier, 600, "/api/admin-auth-callback")]);
+    // Keep the short-lived verifier available across the complete same-site
+    // OAuth return. It is HttpOnly, Secure, random, and expires in ten minutes.
+    auth.appendCookies(res, [auth.cookie(auth.PKCE_COOKIE, verifier, 600)]);
 
     const authorize = new URL(`${config.supabaseUrl}/auth/v1/authorize`);
     authorize.searchParams.set("provider", "google");

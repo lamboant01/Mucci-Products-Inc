@@ -63,7 +63,7 @@ function clearSession(res) {
 }
 
 function clearOAuthCookies(res) {
-  appendCookies(res, [cookie(PKCE_COOKIE, "", 0, "/api/admin-auth-callback"), cookie(LOGIN_COOKIE, "", 0, "/api/admin-auth-start")]);
+  appendCookies(res, [cookie(PKCE_COOKIE, "", 0), cookie(LOGIN_COOKIE, "", 0, "/api/admin-auth-start")]);
 }
 
 function setSession(res, session) {
