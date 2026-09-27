@@ -33,7 +33,7 @@ on the pinned Three.js and OCCT browser modules. The AGPL Three Slicer engine,
 its licence, and its third-party notices are kept under
 `estimator/vendor/three-slicer/` so the worker does not depend on a remote path.
 
-Run migrations 004 through 013 in order after migrations 001 through 003. All
+Run migrations 004 through 014 in order after migrations 001 through 003. All
 private pricing values and fallback-time assumptions are centralized in
 the single-row `print_estimator_config` table created by that migration. Update
 that row in Supabase to change pricing without editing the public website.
@@ -68,6 +68,28 @@ The Etsy destination is set once as `etsyUrl` in `config.js`. No additional
 environment variables are required beyond the existing public Supabase URL and
 anon key. Uploaded customer files are private; the admin page creates a
 short-lived signed link when the administrator opens a file.
+
+### Estimate review and Etsy preparation
+
+The existing protected `/admin/estimates/` route supports exact quote-code
+lookup, recent-estimate filters, final price and quantity review, a confirmation
+checklist, status changes, and a saved Etsy listing-preparation history. The
+**Prepare Etsy Listing** action saves a snapshot and generates copyable title,
+price, listing quantity, processing window, customer-safe description, and Etsy
+reply text. It does not connect to Etsy, publish a listing, read messages, or
+send customer communication. Final Etsy actions remain manual.
+
+Migration `014_etsy_listing_preparation.sql` adds the review fields, model
+dimensions, `etsy_prepared` and `declined` statuses, protected admin RPCs, and
+the RLS-protected `etsy_listing_preparations` history table. Apply it manually
+in Supabase before using the upgraded dashboard. It does not change the private
+Storage bucket or require a new environment variable.
+
+The customer-facing listing templates are in
+`admin/estimates/etsy-listing.js`. Statuses, the default listing quantity, and
+the processing-time mapping are centralized in
+`admin/estimates/etsy-listing-config.js`. The Etsy destination remains the
+single `etsyUrl` value in `config.js`.
 
 ## Mucci Digital Cards
 

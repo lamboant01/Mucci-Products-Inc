@@ -187,6 +187,9 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
         ...calculatedPayload,
         p_name: values.name.trim() || null, p_file_path: filePath,
         p_original_file_name: selectedFile?.file.name || null,
+        p_model_width_mm: loadedModel?.dimensions?.x || null,
+        p_model_depth_mm: loadedModel?.dimensions?.y || null,
+        p_model_height_mm: loadedModel?.dimensions?.z || null,
         p_print_time_source: usedSlicer ? "slicer" : "unknown",
         p_print_profile: usedSlicer ? values.print_profile : null,
         p_notes: values.notes.trim() || null
