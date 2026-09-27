@@ -9,7 +9,9 @@ module.exports = async function handler(req, res) {
     const config = auth.configuration();
     const values = auth.requestQuery(req);
     const cookies = auth.cookieMap(req);
-    const verifier = cookies[auth.PKCE_COOKIE];
+    // Prefer state tied to this exact OAuth attempt. The cookie remains a
+    // compatibility fallback, but can be overwritten by repeated sign-ins.
+    const verifier = auth.openOAuthState(config, values.login || values.state) || cookies[auth.PKCE_COOKIE];
     if (!values.code) {
       console.warn("Admin authentication failed:", "missing_oauth_code");
       auth.clearOAuthCookies(res);

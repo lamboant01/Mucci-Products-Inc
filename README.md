@@ -169,6 +169,10 @@ and contains no private route. Authorization is enforced by the Vercel server
 against one exact Supabase user UUID; browser JavaScript never receives the
 service-role key and cannot call administrator tables or RPCs directly. Protect
 the authorized Google account with Google 2-Step Verification or a passkey.
+Each login attempt carries its own encrypted, ten-minute PKCE state through the
+OAuth callback. This prevents repeated or simultaneous sign-in attempts from
+overwriting one another; the HttpOnly verifier cookie remains only as a
+compatibility fallback.
 
 The `card-assets` public Storage bucket accepts PNG, JPEG, WebP, and SVG files up to 5 MB. Owner uploads use an object path beginning with their Auth UUID. The dashboard supports profile-photo and company-logo uploads after the first profile is created.
 

@@ -169,19 +169,46 @@ test("OAuth uses a generic callback and returns only an authorized session to ad
   const providerUrl = new URL(start.headers.Location);
   assert.equal(providerUrl.pathname, "/auth/v1/authorize");
   assert.equal(providerUrl.searchParams.get("provider"), "google");
-  assert.equal(providerUrl.searchParams.get("redirect_to"), "https://mucciproducts.com/api/admin-auth-callback");
+  const callbackUrl = new URL(providerUrl.searchParams.get("redirect_to"));
+  assert.equal(callbackUrl.origin + callbackUrl.pathname, "https://mucciproducts.com/api/admin-auth-callback");
+  const loginState = callbackUrl.searchParams.get("login");
+  assert.ok(loginState);
+  assert.equal(providerUrl.searchParams.get("state"), loginState);
   const pkceCookie = start.headers["Set-Cookie"].find((value) => value.startsWith("mucci_admin_pkce="));
   const verifier = decodeURIComponent(pkceCookie.match(/^mucci_admin_pkce=([^;]+)/)[1]);
+  assert.equal(auth.openOAuthState(auth.configuration(), loginState), verifier);
 
   global.fetch = async (input) => {
     assert.match(String(input), /\/auth\/v1\/token\?grant_type=pkce$/);
     return new Response(JSON.stringify({ access_token:"access", refresh_token:"refresh", expires_in:3600, user:googleUser() }), { status:200, headers:{ "Content-Type":"application/json" } });
   };
   const callback = responseRecorder();
-  await authCallback({ method:"GET", query:{ code:"oauth-code" }, headers:{ cookie:`mucci_admin_pkce=${encodeURIComponent(verifier)}` } }, callback);
+  await authCallback({ method:"GET", query:{ code:"oauth-code", login:loginState }, headers:{} }, callback);
   assert.equal(callback.statusCode, 303);
   assert.equal(callback.headers.Location, "https://mucciproducts.com/admin");
   assert.match(String(callback.headers["Set-Cookie"]), /mucci_sb_admin_access=access/);
+});
+
+test("each OAuth attempt carries its own encrypted verifier", { concurrency:false }, async (context) => {
+  const original = { ...process.env };
+  context.after(() => { process.env = original; });
+  Object.assign(process.env, environment());
+
+  const first = responseRecorder();
+  const second = responseRecorder();
+  const request = { method:"POST", headers:{ origin:"https://mucciproducts.com", cookie:"mucci_admin_login=1" } };
+  await authStart(request, first);
+  await authStart(request, second);
+  const firstState = new URL(new URL(first.headers.Location).searchParams.get("redirect_to")).searchParams.get("login");
+  const secondState = new URL(new URL(second.headers.Location).searchParams.get("redirect_to")).searchParams.get("login");
+  const config = auth.configuration();
+
+  assert.notEqual(firstState, secondState);
+  assert.ok(auth.openOAuthState(config, firstState));
+  assert.ok(auth.openOAuthState(config, secondState));
+  const middle = Math.floor(firstState.length / 2);
+  const tampered = `${firstState.slice(0, middle)}${firstState[middle] === "A" ? "B" : "A"}${firstState.slice(middle + 1)}`;
+  assert.equal(auth.openOAuthState(config, tampered), "");
 });
 
 test("OAuth callback logs only a safe token-exchange failure reason", { concurrency:false }, async (context) => {

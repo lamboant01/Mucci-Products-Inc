@@ -1,5 +1,7 @@
 "use strict";
 
+const crypto = require("node:crypto");
+
 const ACCESS_COOKIE = "mucci_sb_admin_access";
 const REFRESH_COOKIE = "mucci_sb_admin_refresh";
 const PKCE_COOKIE = "mucci_admin_pkce";
@@ -72,6 +74,41 @@ function setSession(res, session) {
     cookie(ACCESS_COOKIE, String(session.access_token), accessMaxAge),
     cookie(REFRESH_COOKIE, String(session.refresh_token), 60 * 60 * 24 * 30)
   ]);
+}
+
+function oauthStateKey(config) {
+  return crypto.createHash("sha256").update(`mucci-admin-oauth\0${config.serviceKey}`).digest();
+}
+
+function oauthStateAad(config) {
+  return Buffer.from(`mucci-admin-oauth:${new URL(config.siteUrl).origin}`);
+}
+
+function sealOAuthState(config, verifier, now = Date.now()) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", oauthStateKey(config), iv);
+  cipher.setAAD(oauthStateAad(config));
+  const payload = Buffer.from(JSON.stringify({ version:1, verifier:String(verifier), expiresAt:now + 10 * 60 * 1000 }));
+  const encrypted = Buffer.concat([cipher.update(payload), cipher.final()]);
+  return Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString("base64url");
+}
+
+function openOAuthState(config, token, now = Date.now()) {
+  try {
+    const clean = String(token || "");
+    if (!/^[A-Za-z0-9_-]{80,2048}$/.test(clean)) return "";
+    const packed = Buffer.from(clean, "base64url");
+    if (packed.length < 29) return "";
+    const decipher = crypto.createDecipheriv("aes-256-gcm", oauthStateKey(config), packed.subarray(0, 12));
+    decipher.setAAD(oauthStateAad(config));
+    decipher.setAuthTag(packed.subarray(12, 28));
+    const payload = JSON.parse(Buffer.concat([decipher.update(packed.subarray(28)), decipher.final()]).toString("utf8"));
+    if (payload?.version !== 1 || !Number.isFinite(payload.expiresAt) || payload.expiresAt < now || payload.expiresAt > now + 11 * 60 * 1000) return "";
+    const verifier = String(payload.verifier || "");
+    return /^[A-Za-z0-9_-]{43,128}$/.test(verifier) ? verifier : "";
+  } catch {
+    return "";
+  }
 }
 
 function providerIsGoogle(user) {
@@ -200,6 +237,6 @@ module.exports = {
   ACCESS_COOKIE, REFRESH_COOKIE, PKCE_COOKIE, LOGIN_COOKIE,
   ALLOWED_SECTIONS, appendCookies, authenticateAdmin, authorizationFailureReason, authorizeUser, clearOAuthCookies,
   clearSession, configuration, cookie, cookieMap, emailIsVerified, notFound,
-  apiNotFound, providerIsGoogle, requestBody, requestQuery,
+  apiNotFound, openOAuthState, providerIsGoogle, requestBody, requestQuery, sealOAuthState,
   requestIsSameOrigin, section, securityHeaders, setSession
 };
