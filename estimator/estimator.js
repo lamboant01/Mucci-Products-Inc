@@ -113,10 +113,7 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
 
   function slicingProgress(event) {
     const status = document.querySelector("#slice-status");
-    if (event?.stage) status.textContent = `${event.stage}…`;
-    else if (event?.slice !== undefined) status.textContent = "Slicing the model…";
-    else if (event?.prepare !== undefined) status.textContent = "Preparing toolpaths…";
-    else if (event?.export !== undefined) status.textContent = "Generating G-code…";
+    if (event) status.textContent = "Preparing your estimate…";
   }
 
   async function calculate(event) {
@@ -138,7 +135,7 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
         const estimatedSeconds = sliced.seconds || parsed?.seconds;
         if (!estimatedSeconds) throw new Error("The slicer generated G-code but did not return a usable print-time estimate.");
         slicedPrintTime = { ...gcodeTime.toHoursMinutes(estimatedSeconds), grams:sliced.filamentGrams };
-        document.querySelector("#slice-status").textContent = `Estimated print time: ${slicedPrintTime.hours} hours ${slicedPrintTime.minutes} minutes. Estimated filament: ${slicedPrintTime.grams.toFixed(1)} g per item.`;
+        document.querySelector("#slice-status").textContent = "";
       } else {
         slicedPrintTime = null;
       }
@@ -163,8 +160,7 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
 
   function renderEstimate(estimate) {
     result.classList.remove("hidden");
-    const material = estimate.material_grams_per_item == null ? "File review" : `${Number(estimate.material_grams_per_item).toFixed(1)} g per item`;
-    result.innerHTML = `<p class="eyebrow">Your estimate is ready</p><h2>Estimated Project Price</h2><p class="price">${range(estimate.estimated_price_min, estimate.estimated_price_max)} CAD</p><div class="result-meta"><span><strong>Quantity:</strong> ${escapeHtml(calculatedPayload.p_quantity)}</span><span><strong>Approximate price per item:</strong> ${range(estimate.price_per_item_min, estimate.price_per_item_max)} CAD</span><span><strong>Estimated filament:</strong> ${escapeHtml(material)}</span></div>${estimate.requires_manual_review ? '<p class="notice"><strong>File review required.</strong> This project needs manual confirmation before final pricing.</p>' : ""}<p>Estimate only. Final pricing is confirmed after your project and files are reviewed.</p><p>Submitting an estimate does not create an order or charge you. If you contacted us through Etsy, your final order and payment will be completed through Etsy.</p><div class="result-actions"><button id="submit-estimate" class="primary-button" type="button">SUBMIT ESTIMATE</button></div><p id="submit-message" role="alert"></p>`;
+    result.innerHTML = `<p class="eyebrow">Your estimate is ready</p><h2>Estimated Project Price</h2><p class="price">${range(estimate.estimated_price_min, estimate.estimated_price_max)} CAD</p><div class="result-meta"><span><strong>Quantity:</strong> ${escapeHtml(calculatedPayload.p_quantity)}</span><span><strong>Approximate price per item:</strong> ${range(estimate.price_per_item_min, estimate.price_per_item_max)} CAD</span></div>${estimate.requires_manual_review ? '<p class="notice"><strong>File review required.</strong> This project needs manual confirmation before final pricing.</p>' : ""}<p>Estimate only. Final pricing is confirmed after your project and files are reviewed.</p><p>Submitting an estimate does not create an order or charge you. If you contacted us through Etsy, your final order and payment will be completed through Etsy.</p><div class="result-actions"><button id="submit-estimate" class="primary-button" type="button">SUBMIT ESTIMATE</button></div><p id="submit-message" role="alert"></p>`;
     document.querySelector("#submit-estimate").addEventListener("click", submitEstimate);
     result.scrollIntoView({ behavior:"smooth", block:"start" });
   }
