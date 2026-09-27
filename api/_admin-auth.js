@@ -37,7 +37,7 @@ function securityHeaders(res) {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "no-referrer");
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
-  res.setHeader("Content-Security-Policy", "default-src 'self'; img-src 'self' data: https://*.supabase.co; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; font-src 'self'; connect-src 'self' https://*.supabase.co; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+  res.setHeader("Content-Security-Policy", "default-src 'self'; img-src 'self' data: https://*.supabase.co; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; font-src 'self'; connect-src 'self' https://*.supabase.co; base-uri 'none'; frame-ancestors 'none'; form-action 'self' https://*.supabase.co https://accounts.google.com");
 }
 
 function cookieMap(req) {

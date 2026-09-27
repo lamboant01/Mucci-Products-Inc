@@ -103,6 +103,7 @@ test("wrong private route returns a generic 404 while the correct unauthenticate
   assert.match(correct.body, /Sign in with Google/);
   assert.match(correct.body, /noindex,nofollow,noarchive,nosnippet/);
   assert.match(String(correct.headers["Set-Cookie"]), /HttpOnly; Secure; SameSite=Lax; Path=\/api/);
+  assert.match(String(correct.headers["Content-Security-Policy"]), /form-action 'self' https:\/\/\*\.supabase\.co https:\/\/accounts\.google\.com/);
 });
 
 test("OAuth start uses the private SameSite return cookie even when browser origin headers are unavailable", { concurrency:false }, async (context) => {
