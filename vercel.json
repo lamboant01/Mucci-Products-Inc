@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/estimate-drive.js": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
     {
       "source": "/card/:publicToken",

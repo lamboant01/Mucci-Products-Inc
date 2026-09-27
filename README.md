@@ -31,7 +31,7 @@ on the pinned Three.js and OCCT browser modules. The AGPL Three Slicer engine,
 its licence, and its third-party notices are kept under
 `estimator/vendor/three-slicer/` so the worker does not depend on a remote path.
 
-Run migrations 004 through 007 in order after migrations 001 through 003. All
+Run migrations 004 through 009 in order after migrations 001 through 003. All
 private pricing values and fallback-time assumptions are centralized in
 the single-row `print_estimator_config` table created by that migration. Update
 that row in Supabase to change pricing without editing the public website.
@@ -44,6 +44,15 @@ sender domain verified by Resend. `ESTIMATE_EMAIL_TO` is optional and defaults
 to `anthony@mucciproducts.com`. The email includes a protected portal link that
 opens the matching quote after admin sign-in; the model itself remains private
 and is opened from the portal with the existing short-lived signed URL.
+
+Uploaded models can also be mirrored privately into a Google Drive folder by
+the server function at `/api/estimate-drive`. Configure `GOOGLE_DRIVE_CLIENT_ID`,
+`GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_REFRESH_TOKEN`, and
+`GOOGLE_DRIVE_FOLDER_ID` as server-only Vercel variables. The OAuth grant should
+use the narrow `drive.file` scope with offline access. The destination folder
+must remain private. Supabase stays the primary private file store, so a Drive
+outage does not block estimate submission; after a successful mirror, the admin
+portal shows an **Open in Google Drive** link.
 
 The Etsy destination is set once as `etsyUrl` in `config.js`. No additional
 environment variables are required beyond the existing public Supabase URL and

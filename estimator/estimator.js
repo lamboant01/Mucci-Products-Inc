@@ -22,7 +22,12 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
     form.innerHTML = '<p class="notice">The estimator is temporarily unavailable. Please contact Mucci Products through Etsy.</p>';
     return;
   }
-  const client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+  // The public estimator must not inherit an administrator session saved by
+  // another page on the same origin. Its database and Storage calls are
+  // intentionally made with the anonymous role.
+  const client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, {
+    auth:{ persistSession:false, autoRefreshToken:false, detectSessionInUrl:false }
+  });
 
   const money = (value) => new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" }).format(Number(value));
   const range = (minimum, maximum) => Number(minimum) === Number(maximum) ? money(minimum) : `${money(minimum)}–${money(maximum)}`;
@@ -192,15 +197,14 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
       });
       if (error) throw error;
       const submission = Array.isArray(data) ? data[0] : data;
-      try {
-        const notification = await fetch("/api/estimate-notification", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body:JSON.stringify({ quoteCode:submission.quote_code, notificationToken:submission.notification_token }),
-          signal:AbortSignal.timeout(12000)
-        });
-        if (!notification.ok) console.error("The owner notification could not be sent.");
-      } catch (_) { console.error("The owner notification could not be sent."); }
+      const processingBody = JSON.stringify({ quoteCode:submission.quote_code, notificationToken:submission.notification_token });
+      const trigger = (url) => fetch(url, {
+        method:"POST", headers:{ "Content-Type":"application/json" }, body:processingBody, keepalive:true
+      }).then((response) => { if (!response.ok) console.error(`${url} could not process the saved estimate.`); });
+      void Promise.allSettled([
+        trigger("/api/estimate-notification"),
+        ...(filePath ? [trigger("/api/estimate-drive")] : [])
+      ]);
       renderSuccess(submission);
     } catch (error) {
       submitMessage.textContent = error.message || "We could not submit your estimate. Please try again.";
