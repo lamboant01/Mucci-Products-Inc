@@ -20,7 +20,8 @@ and 25% for four. Slicer filament length is converted to PLA weight using
 1.75 mm filament at 1.24 g/cm³. The sliced-print price is $2.50 CAD per total
 production hour plus $0.40 CAD per total filament gram, with the colour purge
 allowance applied to both totals. Design and assembly are separate optional
-charges; there is no additional base charge.
+charges. The total order is subject to a $40 CAD minimum; that minimum is not
+added on top of the calculated price.
 
 The configured build volume is 250 × 250 × 250 mm. Models exceeding any one
 of those dimensions are rejected before slicing.
@@ -32,7 +33,7 @@ on the pinned Three.js and OCCT browser modules. The AGPL Three Slicer engine,
 its licence, and its third-party notices are kept under
 `estimator/vendor/three-slicer/` so the worker does not depend on a remote path.
 
-Run migrations 004 through 012 in order after migrations 001 through 003. All
+Run migrations 004 through 013 in order after migrations 001 through 003. All
 private pricing values and fallback-time assumptions are centralized in
 the single-row `print_estimator_config` table created by that migration. Update
 that row in Supabase to change pricing without editing the public website.
