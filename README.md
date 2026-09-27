@@ -38,10 +38,12 @@ that row in Supabase to change pricing without editing the public website.
 
 Submitted estimates can send a one-time owner notification through the Vercel
 function at `/api/estimate-notification`. Configure `SUPABASE_URL`,
-`SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, and `ESTIMATE_EMAIL_FROM` as
-server-only Vercel environment variables. `ESTIMATE_EMAIL_FROM` must use a
-sender domain verified by Resend. `ESTIMATE_EMAIL_TO` is optional and defaults
-to `anthony@mucciproducts.com`. The email includes a protected portal link that
+`SUPABASE_SERVICE_ROLE_KEY`, and `RESEND_API_KEY` as server-only Vercel
+environment variables. The default sender is
+`Mucci Products <order@mucciproducts.com>` and the `mucciproducts.com` domain
+must be verified by Resend. `ESTIMATE_EMAIL_FROM` can override that sender.
+`ESTIMATE_EMAIL_TO` is optional and defaults to `anthony@mucciproducts.com`.
+The email includes a protected portal link that
 opens the matching quote after admin sign-in; the model itself remains private
 and is opened from the portal with the existing short-lived signed URL.
 

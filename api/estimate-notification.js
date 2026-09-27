@@ -1,6 +1,7 @@
 "use strict";
 
 const { OWNER_EMAIL, buildEstimateEmail, normalizeQuoteCode } = require("./_estimate-email");
+const DEFAULT_FROM_EMAIL = "Mucci Products <order@mucciproducts.com>";
 
 const SELECT_COLUMNS = [
   "quote_code", "name", "original_file_name", "file_path", "file_status", "quantity",
@@ -17,7 +18,7 @@ function configuration() {
     supabaseUrl:String(process.env.SUPABASE_URL || "").replace(/\/$/, ""),
     serviceKey:process.env.SUPABASE_SERVICE_ROLE_KEY,
     resendKey:process.env.RESEND_API_KEY,
-    from:process.env.ESTIMATE_EMAIL_FROM,
+    from:process.env.ESTIMATE_EMAIL_FROM || DEFAULT_FROM_EMAIL,
     to:process.env.ESTIMATE_EMAIL_TO || OWNER_EMAIL,
     siteUrl:String(process.env.PUBLIC_SITE_URL || "https://mucciproducts.com").replace(/\/$/, "")
   };

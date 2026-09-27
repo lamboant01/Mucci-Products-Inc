@@ -22,7 +22,6 @@ test("sends one protected estimate summary to the owner", { concurrency:false },
     SUPABASE_URL:"https://project.supabase.co",
     SUPABASE_SERVICE_ROLE_KEY:"service-role-test",
     RESEND_API_KEY:"resend-test",
-    ESTIMATE_EMAIL_FROM:"Mucci Products <estimates@mucciproducts.com>",
     PUBLIC_SITE_URL:"https://mucciproducts.com"
   });
 
@@ -56,6 +55,7 @@ test("sends one protected estimate summary to the owner", { concurrency:false },
   assert.match(calls[0].url, /notification_token=eq\.123e4567-e89b-42d3-a456-426614174000/);
   const emailCall = calls.find((call) => call.url === "https://api.resend.com/emails");
   const payload = JSON.parse(emailCall.init.body);
+  assert.equal(payload.from, "Mucci Products <order@mucciproducts.com>");
   assert.deepEqual(payload.to, ["anthony@mucciproducts.com"]);
   assert.match(payload.text, /admin\/estimates\/\?quote=MP-A42K7/);
   assert.match(payload.text, /bracket\.stl/);
