@@ -45,7 +45,6 @@ async function downloadModel(config, filePath) {
 async function markMirrored(config, quoteCode, saved) {
   const url = new URL(`${config.supabaseUrl}/rest/v1/print_estimates`);
   url.searchParams.set("quote_code", `eq.${quoteCode}`);
-  url.searchParams.set("drive_file_id", "is.null");
   const response = await fetch(url, {
     method:"PATCH",
     headers:headers(config.serviceKey, { "Content-Type":"application/json", Prefer:"return=minimal" }),
@@ -70,7 +69,18 @@ module.exports = async function handler(req, res) {
     const supabase = connection.supabaseConfiguration();
     const driveConfig = drive.configuration(await connection.storedRefreshToken(supabase));
     const estimate = await findEstimate(supabase, quoteCode, notificationToken);
-    if (!estimate || !estimate.file_path || estimate.drive_file_id) return res.status(202).json({ accepted:true });
+    if (!estimate || !estimate.file_path) return res.status(202).json({ accepted:true });
+    if (estimate.drive_file_id) {
+      if (/^https:\/\/drive\.google\.com\/drive\/folders\//.test(estimate.drive_web_view_link || "")) {
+        return res.status(202).json({ accepted:true });
+      }
+      const organized = await drive.organizeModel(driveConfig, {
+        quoteCode:estimate.quote_code,
+        fileId:estimate.drive_file_id
+      });
+      await markMirrored(supabase, quoteCode, organized);
+      return res.status(200).json({ mirrored:true, organized:true });
+    }
     const bytes = await downloadModel(supabase, estimate.file_path);
     const saved = await drive.uploadModel(driveConfig, {
       bytes,

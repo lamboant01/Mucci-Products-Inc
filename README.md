@@ -57,7 +57,8 @@ client redirect URI and should point to
 `https://mucciproducts.com/api/google-drive-callback`. The destination folder
 must remain private. Supabase stays the primary private file store, so a Drive
 outage does not block estimate submission; after a successful mirror, the admin
-portal shows an **Open in Google Drive** link.
+portal shows an **Open in Google Drive** link. Each quote is stored in a private
+subfolder named after its quote code, and retries reuse that folder.
 
 The Etsy destination is set once as `etsyUrl` in `config.js`. No additional
 environment variables are required beyond the existing public Supabase URL and

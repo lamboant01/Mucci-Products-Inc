@@ -66,12 +66,60 @@ async function accessToken(config) {
   return token;
 }
 
+function driveQueryValue(value) {
+  return String(value).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function folderResult(value, quoteCode) {
+  if (!value || !value.id) throw new Error(`Google Drive did not return a folder for ${quoteCode}.`);
+  return {
+    id:String(value.id),
+    webViewLink:String(value.webViewLink || `https://drive.google.com/drive/folders/${encodeURIComponent(value.id)}`)
+  };
+}
+
+async function quoteFolder(token, config, quoteCode) {
+  const listUrl = new URL("https://www.googleapis.com/drive/v3/files");
+  listUrl.searchParams.set("q", `'${driveQueryValue(config.folderId)}' in parents and name = '${driveQueryValue(quoteCode)}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
+  listUrl.searchParams.set("spaces", "drive");
+  listUrl.searchParams.set("pageSize", "1");
+  listUrl.searchParams.set("fields", "files(id,name,webViewLink)");
+  listUrl.searchParams.set("supportsAllDrives", "true");
+  listUrl.searchParams.set("includeItemsFromAllDrives", "true");
+  const existing = await fetch(listUrl, {
+    headers:{ Authorization:`Bearer ${token}` },
+    signal:AbortSignal.timeout(12000)
+  });
+  if (!existing.ok) throw new Error(`Google Drive quote folder lookup failed with status ${existing.status}.`);
+  const matches = await existing.json();
+  if (matches.files?.[0]) return folderResult(matches.files[0], quoteCode);
+
+  const createUrl = new URL("https://www.googleapis.com/drive/v3/files");
+  createUrl.searchParams.set("supportsAllDrives", "true");
+  createUrl.searchParams.set("fields", "id,name,webViewLink");
+  const created = await fetch(createUrl, {
+    method:"POST",
+    headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json; charset=UTF-8" },
+    body:JSON.stringify({
+      name:quoteCode,
+      mimeType:"application/vnd.google-apps.folder",
+      parents:[config.folderId],
+      description:`Mucci Products 3D printing estimate ${quoteCode}`,
+      appProperties:{ mucciQuoteCode:quoteCode, mucciItemType:"estimate-folder" }
+    }),
+    signal:AbortSignal.timeout(12000)
+  });
+  if (!created.ok) throw new Error(`Google Drive quote folder creation failed with status ${created.status}.`);
+  return folderResult(await created.json(), quoteCode);
+}
+
 async function uploadWithAccessToken(token, config, model) {
   const name = fileName(model.originalFileName, model.quoteCode);
   const type = contentType(name);
+  const folder = await quoteFolder(token, config, model.quoteCode);
   const metadata = {
     name,
-    parents:[config.folderId],
+    parents:[folder.id],
     description:`Mucci Products 3D printing estimate ${model.quoteCode}`,
     appProperties:{ mucciQuoteCode:model.quoteCode }
   };
@@ -102,12 +150,45 @@ async function uploadWithAccessToken(token, config, model) {
   return {
     id:String(saved.id),
     name:String(saved.name || name),
-    webViewLink:String(saved.webViewLink || `https://drive.google.com/file/d/${encodeURIComponent(saved.id)}/view`)
+    webViewLink:folder.webViewLink
   };
+}
+
+async function organizeWithAccessToken(token, config, model) {
+  const folder = await quoteFolder(token, config, model.quoteCode);
+  const fileUrl = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(model.fileId)}`);
+  fileUrl.searchParams.set("fields", "id,parents");
+  fileUrl.searchParams.set("supportsAllDrives", "true");
+  const current = await fetch(fileUrl, {
+    headers:{ Authorization:`Bearer ${token}` },
+    signal:AbortSignal.timeout(12000)
+  });
+  if (!current.ok) throw new Error(`Google Drive file lookup failed with status ${current.status}.`);
+  const file = await current.json();
+  const parents = Array.isArray(file.parents) ? file.parents.map(String) : [];
+  if (!parents.includes(folder.id)) {
+    const moveUrl = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(model.fileId)}`);
+    moveUrl.searchParams.set("addParents", folder.id);
+    if (parents.length) moveUrl.searchParams.set("removeParents", parents.join(","));
+    moveUrl.searchParams.set("supportsAllDrives", "true");
+    moveUrl.searchParams.set("fields", "id");
+    const moved = await fetch(moveUrl, {
+      method:"PATCH",
+      headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json" },
+      body:"{}",
+      signal:AbortSignal.timeout(12000)
+    });
+    if (!moved.ok) throw new Error(`Google Drive file move failed with status ${moved.status}.`);
+  }
+  return { id:String(model.fileId), webViewLink:folder.webViewLink };
 }
 
 async function uploadModel(config, model) {
   return uploadWithAccessToken(await accessToken(config), config, model);
 }
 
-module.exports = { configuration, oauthConfiguration, oauthClient, contentType, fileName, uploadModel, uploadWithAccessToken };
+async function organizeModel(config, model) {
+  return organizeWithAccessToken(await accessToken(config), config, model);
+}
+
+module.exports = { configuration, oauthConfiguration, oauthClient, contentType, fileName, quoteFolder, organizeModel, organizeWithAccessToken, uploadModel, uploadWithAccessToken };
