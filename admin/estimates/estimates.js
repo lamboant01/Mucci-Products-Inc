@@ -6,7 +6,8 @@
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" })[character]);
   const money = (value) => new Intl.NumberFormat("en-CA", { style:"currency", currency:"CAD" }).format(Number(value));
   const price = (estimate) => Number(estimate.estimated_price) === Number(estimate.estimated_price_max) ? money(estimate.estimated_price) : `${money(estimate.estimated_price)}–${money(estimate.estimated_price_max)}`;
-  const label = (value) => String(value || "None").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  const label = (value) => ({ standard:"Standard Detail", draft:"Efficient Larger Prints" })[value]
+    || String(value || "None").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   const quoteFromUrl = () => {
     const value = new URLSearchParams(window.location.search).get("quote")?.trim().toUpperCase() || "";
     return /^MP-[A-HJ-NP-Z2-9]{5}$/.test(value) ? value : "";

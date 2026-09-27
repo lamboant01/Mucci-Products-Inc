@@ -10,8 +10,8 @@ optional model files to a private Storage bucket. The protected lookup page is
 available at `/admin/estimates/` and reuses the existing administrator account.
 Customers upload an STL, 3MF, OBJ, STEP, or STP model, inspect it in an
 interactive 3D preview, and have it converted to G-code locally in a Web Worker
-with the vendored Three Slicer WASM engine. Detailed (0.18 mm), Standard
-(0.20 mm), and Draft (0.24 mm) profiles affect the calculated time. The fixed
+with the vendored Three Slicer WASM engine. Standard Detail (0.20 mm) and
+Efficient Larger Prints (0.24 mm) profiles affect the calculated time. The fixed
 0.4 mm nozzle, three walls, and
 30% infill are defined in `estimator/slicer-config.js` and are not shown in the
 customer interface. Multi-colour purge allowances are stored centrally in the

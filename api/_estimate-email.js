@@ -14,6 +14,8 @@ function escapeHtml(value) {
 }
 
 function label(value) {
+  const profile = { standard:"Standard Detail", draft:"Efficient Larger Prints" }[value];
+  if (profile) return profile;
   return text(value || "Not provided", 160).replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 

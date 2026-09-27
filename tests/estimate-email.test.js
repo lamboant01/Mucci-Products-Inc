@@ -17,6 +17,7 @@ test("builds an easy-to-read owner estimate email with a portal link", () => {
   assert.match(built.text, /Estimated price: \$72\.40 CAD/);
   assert.match(built.text, /Filament: 10\.0 g per item/);
   assert.match(built.text, /Blue & strong/);
+  assert.match(built.text, /Print profile: Standard Detail/);
   assert.match(built.portalUrl, /\/admin\/estimates\/\?quote=MP-A42K7$/);
   assert.match(built.html, /Anthony &lt;Owner&gt;/);
   assert.doesNotMatch(built.html, /Anthony <Owner>/);
