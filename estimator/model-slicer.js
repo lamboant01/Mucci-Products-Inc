@@ -7,6 +7,7 @@ import { STLExporter } from "https://esm.sh/three@0.180.0/examples/jsm/exporters
 import { createSlicerClient } from "./vendor/three-slicer/engine/src/client.js";
 import { SLICER_PROFILES } from "./slicer-config.js";
 import { filamentGrams } from "./filament-math.mjs";
+import { slicerFilamentLength, slicerTimeSeconds } from "./slicer-result.mjs";
 
 let viewer;
 let currentGroup;
@@ -153,12 +154,13 @@ export async function sliceModel(model, profileName, onProgress) {
     ]);
     if (result?.error) throw new Error(result.error);
     if (result?.warnings?.includes("over_bed_model")) throw new Error("The model does not fit within the print area.");
-    if (!result?.gcode || !Number(result?.stats?.time_estimate)) throw new Error("The slicer did not return a usable G-code time estimate.");
-    const filamentLengthMm = Number(result?.stats?.filament_mm);
+    const filamentLengthMm = slicerFilamentLength(result);
+    if (!filamentLengthMm) throw new Error("The slicer found no printable material. Check that the model is solid, has a usable scale, and is not thinner than the selected layer height.");
     const materialGrams = filamentGrams(filamentLengthMm);
-    if (!materialGrams) throw new Error("The slicer did not return usable filament usage.");
+    const seconds = slicerTimeSeconds(result, globalThis.MucciGcodeTime?.parse);
+    if (!seconds) throw new Error("The slicer produced toolpaths but did not return a print-time estimate.");
     onProgress?.({ stage:"G-code ready" });
-    return { gcode:result.gcode, seconds:Number(result.stats.time_estimate), filamentLengthMm, filamentGrams:materialGrams };
+    return { gcode:typeof result.gcode === "string" ? result.gcode : "", seconds, filamentLengthMm, filamentGrams:materialGrams };
   } finally {
     if (timeoutId) window.clearTimeout(timeoutId);
     client.terminate();
