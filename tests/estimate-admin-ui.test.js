@@ -30,12 +30,15 @@ test("admin workflow uses protected exact-match RPCs and private signed file acc
 
 test("admin workflow includes review safety, copy actions, filters, and manual Etsy handoff", () => {
   const source = read("estimates.js");
+  const config = fs.readFileSync(path.join(__dirname, "..", "config.js"), "utf8");
   for (const phrase of [
     "Prepare Etsy Listing", "Final Etsy Price", "Etsy Listing Quantity", "Admin override",
     "Copy Quote Code", "Copy Customer Email", "Copy Description", "Copy Etsy Reply",
     "Copy All Etsy Details", "Open Etsy Messages", "Mark Reviewed", "Mark Completed", "Decline"
   ]) assert.match(source, new RegExp(phrase));
   assert.match(source, /\["all", \.\.\.statuses, "manual_review"\]/);
+  assert.match(source, /config\.etsyMessagesUrl/);
+  assert.match(config, /etsyMessagesUrl:\s*"https:\/\/www\.etsy\.com\/messages\?ref=seller-platform-mcnav"/);
   assert.doesNotMatch(source, /playwright|selenium|etsy.*cookie|etsy.*password/i);
 });
 

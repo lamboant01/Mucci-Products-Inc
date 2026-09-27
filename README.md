@@ -64,7 +64,8 @@ outage does not block estimate submission; after a successful mirror, the admin
 portal shows an **Open in Google Drive** link. Each quote is stored in a private
 subfolder named after its quote code, and retries reuse that folder.
 
-The Etsy destination is set once as `etsyUrl` in `config.js`. No additional
+The public Etsy shop destination is set as `etsyUrl` and the private admin
+Messages destination is set as `etsyMessagesUrl` in `config.js`. No additional
 environment variables are required beyond the existing public Supabase URL and
 anon key. Uploaded customer files are private; the admin page creates a
 short-lived signed link when the administrator opens a file.
