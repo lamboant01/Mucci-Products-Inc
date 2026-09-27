@@ -50,6 +50,14 @@ async function patch(config, table, parameters, body) {
   });
 }
 
+async function insert(config, table, body) {
+  return request(config, `/rest/v1/${encodeURIComponent(table)}`, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json", Prefer:"return=representation" },
+    body:JSON.stringify(body)
+  });
+}
+
 async function signedStorageUrl(config, bucket, objectPath, expiresIn = 60) {
   const encoded = String(objectPath).split("/").map(encodeURIComponent).join("/");
   const data = await request(config, `/storage/v1/object/sign/${encodeURIComponent(bucket)}/${encoded}`, {
@@ -75,4 +83,4 @@ async function signedUploadUrl(config, bucket, objectPath) {
   return { signedUrl, publicUrl };
 }
 
-module.exports = { headers, patch, queryPath, request, rpc, select, signedStorageUrl, signedUploadUrl };
+module.exports = { headers, insert, patch, queryPath, request, rpc, select, signedStorageUrl, signedUploadUrl };

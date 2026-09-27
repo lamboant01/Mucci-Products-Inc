@@ -17,3 +17,13 @@ test("overload repair migration is safe to run after the corrected migration cha
   assert.match(sql, /create or replace function public\.submit_print_estimate\s*\(/i);
   assert.doesNotMatch(sql, /drop\s+(table|schema)/i);
 });
+
+test("operations migration adds only server-private audit data and lightweight order states", () => {
+  const sql = migration("016_admin_operations_dashboard.sql");
+  assert.match(sql, /create table if not exists public\.admin_activity/i);
+  assert.match(sql, /revoke all on public\.admin_activity from public, anon, authenticated/i);
+  assert.match(sql, /grant select, insert on public\.admin_activity to service_role/i);
+  assert.match(sql, /'accepted', 'in_production'/i);
+  assert.doesNotMatch(sql, /create table .*customers|create table .*orders/i);
+  assert.doesNotMatch(sql, /password|access_token|api_key/i);
+});

@@ -206,8 +206,8 @@ test("authenticated but unauthorized management API calls also return 404", { co
 
 test("admin routes are protected server pages and remain absent from public navigation", () => {
   const routes = JSON.parse(read("vercel.json")).routes;
-  assert.ok(routes.some((route) => route.src === "/admin/?" && route.dest === "/api/admin-page?section=estimates"));
-  assert.ok(routes.some((route) => route.src === "/admin/(estimates|cards|security)/?" && route.dest === "/api/admin-page?section=$1"));
+  assert.ok(routes.some((route) => route.src === "/admin/?" && route.dest === "/api/admin-page?section=dashboard"));
+  assert.ok(routes.some((route) => route.src === "/admin/(dashboard|estimates|orders|customers|cards|files|activity|security)/?" && route.dest === "/api/admin-page?section=$1"));
   assert.ok(routes.some((route) => route.src === "/admin(?:/.*)?" && route.dest === "/api/not-found"));
   assert.ok(!routes.some((route) => route.src === "/([A-Za-z0-9]{16})/?"));
   assert.ok(routes.some((route) => route.src === "/card-dashboard(?:/.*)?" && route.dest === "/api/not-found"));
@@ -220,10 +220,21 @@ test("admin routes are protected server pages and remain absent from public navi
 });
 
 test("browser management clients contain no Supabase administrator identity or direct database access", () => {
-  const clients = `${read("admin/estimates/estimates.js")}\n${read("card-dashboard/dashboard.js")}`;
+  const clients = `${read("admin/estimates/estimates.js")}\n${read("admin/operations.js")}\n${read("card-dashboard/dashboard.js")}`;
   assert.doesNotMatch(clients, /createClient|signInWithPassword|allowedAdminEmail|service_role|anthony@/i);
   assert.match(clients, /\/api\/admin-estimates/);
   assert.match(clients, /\/api\/admin-cards/);
+  assert.match(clients, /\/api\/admin-operations/);
+});
+
+test("operations API and pages remain behind server authorization and search blocking", () => {
+  const api = read("api/admin-operations.js");
+  const page = read("api/admin-page.js");
+  assert.match(api, /authenticateAdmin/);
+  assert.match(api, /requestIsSameOrigin/);
+  assert.match(api, /apiNotFound/);
+  assert.match(page, /noindex,nofollow,noarchive,nosnippet/i);
+  assert.doesNotMatch(api, /process\.env\.(?:SUPABASE_SERVICE_ROLE_KEY|GOOGLE_DRIVE_CLIENT_SECRET)/);
 });
 
 test("migration 015 revokes browser admin access and grants server-only RPC execution", () => {

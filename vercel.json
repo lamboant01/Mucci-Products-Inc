@@ -7,9 +7,10 @@
   "routes": [
     { "src": "/assets/management.css", "dest": "/admin/estimates/estimates.css" },
     { "src": "/assets/management-estimates.js", "dest": "/admin/estimates/estimates.js" },
+    { "src": "/assets/management-operations.js", "dest": "/admin/operations.js" },
     { "src": "/assets/management-cards.js", "dest": "/card-dashboard/dashboard.js" },
-    { "src": "/admin/?", "dest": "/api/admin-page?section=estimates" },
-    { "src": "/admin/(estimates|cards|security)/?", "dest": "/api/admin-page?section=$1" },
+    { "src": "/admin/?", "dest": "/api/admin-page?section=dashboard" },
+    { "src": "/admin/(dashboard|estimates|orders|customers|cards|files|activity|security)/?", "dest": "/api/admin-page?section=$1" },
     { "src": "/admin(?:/.*)?", "dest": "/api/not-found" },
     { "src": "/card-dashboard(?:/.*)?", "dest": "/api/not-found" },
     { "src": "/card/([^/]+)", "dest": "/card.html?token=$1" },

@@ -4,7 +4,7 @@ const ACCESS_COOKIE = "mucci_sb_admin_access";
 const REFRESH_COOKIE = "mucci_sb_admin_refresh";
 const PKCE_COOKIE = "mucci_admin_pkce";
 const LOGIN_COOKIE = "mucci_admin_login";
-const ALLOWED_SECTIONS = new Set(["estimates", "cards", "security"]);
+const ALLOWED_SECTIONS = new Set(["dashboard", "estimates", "orders", "customers", "cards", "files", "activity", "security"]);
 
 function configuration() {
   const values = {
@@ -183,7 +183,7 @@ function requestIsSameOrigin(req, config) {
 
 function section(value) {
   const clean = String(value || "").toLowerCase();
-  return ALLOWED_SECTIONS.has(clean) ? clean : "estimates";
+  return ALLOWED_SECTIONS.has(clean) ? clean : "dashboard";
 }
 
 function notFound(res) {

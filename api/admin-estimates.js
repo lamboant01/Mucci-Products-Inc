@@ -11,6 +11,21 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 function quote(value) { return String(value || "").trim().toUpperCase(); }
 function uuid(value) { const clean = String(value || "").toLowerCase(); return UUID_PATTERN.test(clean) ? clean : ""; }
 
+async function logActivity(config, user, event) {
+  try {
+    await db.insert(config, "admin_activity", {
+      actor_user_id:user.id,
+      action:event.action,
+      subject_type:"print_estimate",
+      subject_id:event.estimateId,
+      summary:event.summary,
+      metadata:event.metadata || {}
+    });
+  } catch (error) {
+    console.warn("Admin activity could not be recorded", { action:event.action, statusCode:error?.statusCode });
+  }
+}
+
 function reviewValues(body) {
   const priceText = String(body.finalPrice ?? "").trim();
   if (!/^\d+(?:\.\d{1,2})?$/.test(priceText) || Number(priceText) <= 0) throw new Error("Invalid final price.");
@@ -57,14 +72,18 @@ async function handleAction(config, user, body) {
         p_admin_notes:values.adminNotes || null, p_clarification_notes:values.clarificationNotes || null,
         p_processing_time_override:values.processingOverride || null
       });
-      return { estimate:estimate?.[0] || null };
+      const savedEstimate = estimate?.[0] || null;
+      if (savedEstimate) await logActivity(config, user, { action:"estimate_review_updated", estimateId, summary:`Review details updated for ${savedEstimate.quote_code}.` });
+      return { estimate:savedEstimate };
     }
     case "status": {
       const estimateId = uuid(body.estimateId);
       const status = String(body.status || "");
-      if (!estimateId || !["reviewed", "completed", "declined"].includes(status)) throw new Error("Invalid status change.");
+      if (!estimateId || !listing.config.statuses.includes(status)) throw new Error("Invalid status change.");
       const estimate = await db.rpc(config, "admin_set_print_estimate_status", { p_estimate_id:estimateId, p_status:status });
-      return { estimate:estimate?.[0] || null };
+      const changedEstimate = estimate?.[0] || null;
+      if (changedEstimate) await logActivity(config, user, { action:"estimate_status_changed", estimateId, summary:`${changedEstimate.quote_code} status changed to ${status.replaceAll("_", " ")}.`, metadata:{ status } });
+      return { estimate:changedEstimate };
     }
     case "prepare": {
       const estimateId = uuid(body.estimateId);
@@ -84,6 +103,7 @@ async function handleAction(config, user, body) {
         p_physical_quantity:values.physicalQuantity, p_processing_time:prepared.processing,
         p_generated_by:user.id
       });
+      await logActivity(config, user, { action:"quote_prepared", estimateId, summary:`Customer quote prepared for ${estimate.quote_code}.` });
       return { prepared, snapshot:snapshots?.[0] || null, estimate:{ ...estimate, status:"etsy_prepared" } };
     }
     case "mirror_drive": {
@@ -91,14 +111,18 @@ async function handleAction(config, user, body) {
       if (!estimateId) throw new Error("Invalid estimate.");
       const estimate = await findById(config, estimateId);
       if (!estimate?.file_path) throw new Error("Uploaded file not found.");
-      return estimateDrive.mirrorEstimate(config, estimate);
+      const result = await estimateDrive.mirrorEstimate(config, estimate);
+      await logActivity(config, user, { action:"file_mirrored", estimateId, summary:`Private file organized in Google Drive for ${estimate.quote_code}.` });
+      return result;
     }
     case "signed_file": {
       const estimateId = uuid(body.estimateId);
       if (!estimateId) throw new Error("Invalid estimate.");
       const estimate = await findById(config, estimateId);
       if (!estimate?.file_path) throw new Error("Uploaded file not found.");
-      return { signedUrl:await db.signedStorageUrl(config, "print-estimate-files", estimate.file_path, 60), expiresIn:60 };
+      const signedUrl = await db.signedStorageUrl(config, "print-estimate-files", estimate.file_path, 60);
+      await logActivity(config, user, { action:"file_accessed", estimateId, summary:`Private file link created for ${estimate.quote_code}.` });
+      return { signedUrl, expiresIn:60 };
     }
     default: throw new Error("Invalid action.");
   }

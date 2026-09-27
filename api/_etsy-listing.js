@@ -1,7 +1,7 @@
 "use strict";
 
 const config = Object.freeze({
-  statuses:["pending", "reviewed", "etsy_prepared", "completed", "declined"],
+  statuses:["pending", "reviewed", "etsy_prepared", "awaiting_customer", "accepted", "in_production", "completed", "declined"],
   defaultMaterial:"PLA",
   defaultListingQuantity:1,
   processingRules:[

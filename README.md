@@ -86,6 +86,22 @@ in Supabase before using the upgraded dashboard. It does not change the private
 Storage bucket. Migration `015_server_only_google_admin.sql` removes direct
 browser administrator table/RPC access and makes those operations server-only.
 
+Migration `016_admin_operations_dashboard.sql` adds the server-private admin
+activity log and the `awaiting_customer`, `accepted`, and `in_production`
+estimate statuses used by the operations dashboard. Apply it after migration
+015 before using the expanded status control or Activity section. The dashboard
+does not create duplicate customer or order tables: Customers are grouped from
+the contact details already saved with estimates, and Orders / Projects shows
+accepted, in-production, and completed estimate records.
+
+The protected admin area is available at `/admin` after Google sign-in and now
+includes Dashboard, Requests / Estimates, Orders / Projects, Customers,
+Digital Cards, Files, Activity, and Settings & Security. Only sections backed
+by existing Mucci Products data are included. All reads and mutations continue
+through same-origin Vercel functions that re-check the authorized Google UUID
+server-side. Admin pages send `noindex` and `nofollow` directives in both HTML
+and response headers.
+
 The customer-facing listing templates, statuses, default listing quantity, and
 processing-time mapping are implemented in the server-only
 `api/_etsy-listing.js` module. The Etsy destination remains the single

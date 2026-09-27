@@ -3,7 +3,7 @@
 
   const root = document.querySelector("#estimates-admin");
   const config = window.MUCCI_CONFIG || {};
-  const statuses = ["pending", "reviewed", "etsy_prepared", "completed", "declined"];
+  const statuses = ["pending", "reviewed", "etsy_prepared", "awaiting_customer", "accepted", "in_production", "completed", "declined"];
   const quotePattern = /^MP-[A-HJ-NP-Z2-9]{5}$/;
   let activeEstimate = null;
   let activeHistory = [];
@@ -11,7 +11,7 @@
 
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" })[character]);
   const money = (value) => new Intl.NumberFormat("en-CA", { style:"currency", currency:"CAD" }).format(Number(value));
-  const label = (value) => ({ standard:"Standard Detail", draft:"Efficient Larger Prints", etsy_prepared:"Etsy Prepared", ready:"Ready to Print", modify:"Needs Modifications", design:"Design Required" })[value]
+  const label = (value) => ({ standard:"Standard Detail", draft:"Efficient Larger Prints", pending:"New", reviewed:"Reviewing", etsy_prepared:"Quoted", awaiting_customer:"Awaiting Customer", accepted:"Accepted", in_production:"In Production", declined:"Cancelled", ready:"Ready to Print", modify:"Needs Modifications", design:"Design Required" })[value]
     || String(value || "Not provided").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   const cleanQuote = (value) => String(value || "").trim().toUpperCase();
   const quoteFromUrl = () => cleanQuote(new URLSearchParams(window.location.search).get("quote"));
@@ -137,7 +137,8 @@
         <section class="review-section"><h3>Final Etsy order</h3><div class="form-grid"><label>Final Etsy Price (CAD)<input required name="final_price" inputmode="decimal" value="${finalPrice(estimate).toFixed(2)}" pattern="[0-9]+(?:\\.[0-9]{1,2})?" aria-describedby="price-help"></label><label>Final Quantity<input required name="final_quantity" type="number" min="1" max="999" value="${finalQuantity(estimate)}"></label><label>Etsy Listing Quantity<input required name="listing_quantity" type="number" min="1" max="999" value="1"><small>This Etsy listing represents the complete custom project.</small></label><label>Processing time override<input name="processing_time_override" maxlength="120" value="${escapeHtml(estimate.processing_time_override || "")}" placeholder="${escapeHtml(processing)}"><small>Leave blank to use the suggested window.</small></label></div><p id="price-help" class="help-text">Positive amount with a maximum of two decimal places.</p></section>
         <section class="review-section"><h3>Private review notes</h3><label>Admin notes<textarea name="admin_notes" rows="3" maxlength="5000">${escapeHtml(estimate.admin_notes || "")}</textarea></label><label>Clarification needed before listing<textarea name="clarification_notes" rows="3" maxlength="3000" placeholder="Leave blank when no clarification is needed.">${escapeHtml(estimate.clarification_notes || "")}</textarea></label><button class="button button-secondary" id="save-review" type="button">Save Review Details</button><p id="save-status" class="form-status" role="status"></p></section>
         <section class="review-section"><h3>Estimate review checklist</h3><div id="review-checklist" class="checklist">${checklistMarkup(estimate)}</div><label class="override-check"><input type="checkbox" name="admin_override"> Admin override: prepare despite unchecked items</label></section>
-        <div class="primary-actions"><button class="button button-primary prepare-button" id="prepare-listing" type="submit" disabled>Prepare Etsy Listing</button><button class="button button-secondary" type="button" data-status-action="reviewed">Mark Reviewed</button><button class="button button-secondary" type="button" data-status-action="completed">Mark Completed</button><button class="button button-danger" type="button" data-status-action="declined">Decline</button></div><p id="review-status" class="form-status" role="status">${escapeHtml(successMessage)}</p>
+        <div class="primary-actions"><button class="button button-primary prepare-button" id="prepare-listing" type="submit" disabled>Prepare Etsy Listing</button><button class="button button-secondary" type="button" data-status-action="reviewed">Mark Reviewed</button><button class="button button-secondary" type="button" data-status-action="completed">Mark Completed</button><button class="button button-danger" type="button" data-status-action="declined">Decline</button></div>
+        <div class="status-control"><label>Internal status<select id="internal-status">${statuses.map((item) => `<option value="${item}"${estimate.status === item ? " selected" : ""}>${escapeHtml(label(item))}</option>`).join("")}</select></label><button class="button button-secondary" id="update-status" type="button">Update Status</button></div><p id="review-status" class="form-status" role="status">${escapeHtml(successMessage)}</p>
       </form>
       ${generatedPackage ? generatedPackageMarkup(generatedPackage) : ""}
       <section class="review-section"><h3>Etsy listing history</h3>${history}</section>
@@ -217,6 +218,7 @@
     });
     form.addEventListener("submit", prepareListing);
     document.querySelectorAll("[data-status-action]").forEach((button) => button.addEventListener("click", () => setStatus(button.dataset.statusAction, button)));
+    document.querySelector("#update-status").addEventListener("click", (event) => setStatus(document.querySelector("#internal-status").value, event.currentTarget));
     document.querySelector("#open-file")?.addEventListener("click", (event) => openFile(activeEstimate.file_path, event.currentTarget));
     document.querySelector("#organize-drive")?.addEventListener("click", organizeDrive);
     bindCopyButtons();

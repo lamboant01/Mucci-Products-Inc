@@ -9,6 +9,26 @@ const PROFILE_FIELDS = ["name", "company", "title", "phone", "email", "website",
 const FIELD_LIMITS = { name:120, company:160, title:160, phone:50, email:254, website:500, linkedin:500, instagram:500, address:500, bio:1000, logo_url:2000, profile_image_url:2000 };
 const IMAGE_TYPES = new Map([["image/png", "png"], ["image/jpeg", "jpg"], ["image/webp", "webp"], ["image/svg+xml", "svg"]]);
 
+async function logActivity(config, user, body, payload) {
+  const events = {
+    create:{ action:"digital_card_created", summary:"Digital card profile created." },
+    update:{ action:"digital_card_updated", summary:"Digital card profile updated." },
+    asset_ticket:{ action:"card_asset_upload_started", summary:"Secure digital card image upload started." }
+  };
+  const event = events[body.action];
+  if (!event) return;
+  try {
+    await db.insert(config, "admin_activity", {
+      actor_user_id:user.id, action:event.action, subject_type:"digital_card",
+      subject_id:String(body.profileId || payload?.profile_id || "") || null,
+      summary:event.summary,
+      metadata:body.action === "asset_ticket" ? { field:String(body.field || "") } : {}
+    });
+  } catch (error) {
+    console.warn("Admin activity could not be recorded", { action:event.action, statusCode:error?.statusCode });
+  }
+}
+
 function uuid(value) { const clean = String(value || "").toLowerCase(); return UUID_PATTERN.test(clean) ? clean : ""; }
 
 function profileValues(body) {
@@ -75,6 +95,7 @@ module.exports = async function handler(req, res) {
     if (administrator.status !== "authorized") return auth.apiNotFound(res);
     const body = auth.requestBody(req);
     const payload = await handleAction(config, administrator.user, body);
+    await logActivity(config, administrator.user, body, payload);
     console.info("Authorized card administration action", { action:String(body.action || ""), userId:administrator.user.id });
     return res.status(200).json(payload);
   } catch (error) {
