@@ -110,7 +110,7 @@ async function handleAction(config, user, body) {
       const estimateId = uuid(body.estimateId);
       if (!estimateId) throw new Error("Invalid estimate.");
       const estimate = await findById(config, estimateId);
-      if (!estimate?.file_path) throw new Error("Uploaded file not found.");
+      if (!estimate?.file_path && !estimate?.reference_files?.length) throw new Error("Uploaded files not found.");
       const result = await estimateDrive.mirrorEstimate(config, estimate);
       await logActivity(config, user, { action:"file_mirrored", estimateId, summary:`Private file organized in Google Drive for ${estimate.quote_code}.` });
       return result;

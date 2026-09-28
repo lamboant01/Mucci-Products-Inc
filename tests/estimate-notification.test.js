@@ -34,6 +34,7 @@ test("sends one protected estimate summary to the owner", { concurrency:false },
     return new Response(JSON.stringify([{
       quote_code:"MP-A42K7", name:"Anthony", original_file_name:"bracket.stl",
       file_path:"model/path.stl", file_status:"ready", quantity:1,
+      reference_files:[{ path:"model/references/photo.jpg", name:"photo.jpg" }],
       print_hours_per_item:1, print_minutes_per_item:5, size_category:null,
       colour_count:"2", desired_colours:"Navy blue", material:"PETG", design_level:"none", assembly_required:false, notes:"Blue",
       estimated_material_grams:11, estimated_price:15.2, estimated_price_max:15.2,
@@ -61,6 +62,7 @@ test("sends one protected estimate summary to the owner", { concurrency:false },
   assert.match(payload.text, /bracket\.stl/);
   assert.match(payload.text, /Wanted colours: Navy blue/);
   assert.match(payload.text, /Material: PETG/);
+  assert.match(payload.text, /Reference images: 1 attached/);
   assert.equal(payload.attachments, undefined);
   assert.equal(emailCall.init.headers["Idempotency-Key"], "estimate-submitted/MP-A42K7");
 });

@@ -64,6 +64,7 @@ function estimateRows(estimate) {
     ["Estimated total", `${priceRange(estimate)} CAD`],
     ["Customer name", text(estimate.name, 120) || "Not provided"],
     ["Model file", text(estimate.original_file_name, 255) || (estimate.file_path ? "Uploaded model" : "No model uploaded")],
+    ["Reference images", `${Array.isArray(estimate.reference_files) ? estimate.reference_files.length : 0} attached`],
     ["File status", label(estimate.file_status)],
     ["Finished dimensions", dimensions],
     ["Split and assembly approved", estimate.split_and_assembly_accepted ? `Yes — approximately ${Number(estimate.estimated_section_count || 1)} printable sections` : "Not required"],

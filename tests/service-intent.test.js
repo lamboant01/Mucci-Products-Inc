@@ -33,10 +33,14 @@ test("quote form presents required service and dimensions without changing exist
     "Maximum finished dimensions", "Length", "Width", "Height", "Choose unit",
     "I approve splitting and assembly", "Material and colours", "PLA", "PETG", "Wanted colours",
     "closest available filament match based on current market availability",
-    "Please choose honestly", "may change the selected design level and final price"
+    "Please choose honestly", "may change the selected design level and final price",
+    "Be as specific as possible", "avoid delays caused by follow-up questions",
+    "Reference images", "Up to 10 images", "10 MB each"
   ]) assert.match(html, new RegExp(phrase.replace(/[+]/g, "\\+")));
   assert.match(html, /name="service_intent" value="DESIGN_ONLY"/);
   assert.match(html, /name="service_intent" value="DESIGN_AND_PRINT"/);
+  assert.match(html, /id="reference-images"[^>]*multiple/);
+  assert.match(html, /accept="[^"]*\.heic/);
 });
 
 test("customer estimator separates design, preliminary printing, and total pricing", () => {
@@ -50,6 +54,10 @@ test("customer estimator separates design, preliminary printing, and total prici
   assert.match(source, /desired_colours\.required = includesPhysicalPrinting/);
   assert.match(source, /p_desired_colours/);
   assert.match(source, /p_material: physicalPrinting/);
+  assert.match(source, /maxReferenceImages = 10/);
+  assert.match(source, /maxReferenceImageBytes = 10 \* 1024 \* 1024/);
+  assert.match(source, /p_reference_files:referenceFiles/);
+  assert.match(source, /filePath \|\| referenceFiles\.length/);
   assert.match(source, /sliceModel\(loadedModel, printProfile, slicingProgress, selected\("material"\)\)/);
   assert.match(source, /\["ready", "modify"\]\.includes\(fileStatus\)/);
   assert.match(source, /sliceModel\(loadedModel, printProfile/);
@@ -80,6 +88,17 @@ test("follow-up migration upgrades an already-applied estimator schema", () => {
   assert.match(sql, /notify pgrst, 'reload schema'/);
 });
 
+test("reference-image migration enforces private attachment limits", () => {
+  const sql = read("supabase", "migrations", "019_reference_images_and_a1_speed_update.sql");
+  assert.match(sql, /reference_files jsonb/);
+  assert.match(sql, /jsonb_array_length\(p_reference_files\) > 10/);
+  assert.match(sql, /10485760/);
+  assert.match(sql, /references\/\[0-9a-f-\]\{36\}/);
+  assert.match(sql, /p_reference_files jsonb/);
+  assert.match(sql, /to anon/);
+  assert.match(sql, /to authenticated/);
+});
+
 test("email and admin review show separated estimate components", () => {
   const email = read("api", "_estimate-email.js");
   const admin = read("admin", "estimates", "estimates.js");
@@ -88,5 +107,6 @@ test("email and admin review show separated estimate components", () => {
     assert.match(source, /design estimate/i);
     assert.match(source, /Preliminary print estimate/i);
     assert.match(source, /Wanted colours/i);
+    assert.match(source, /Reference images/i);
   }
 });

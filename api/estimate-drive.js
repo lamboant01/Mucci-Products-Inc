@@ -5,7 +5,7 @@ const drive = require("./_google-drive");
 const connection = require("./_google-drive-connection");
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-const SELECT_COLUMNS = "quote_code,notification_token,original_file_name,file_path,drive_file_id,drive_web_view_link";
+const SELECT_COLUMNS = "quote_code,notification_token,original_file_name,file_path,reference_files,drive_file_id,drive_reference_files,drive_web_view_link";
 
 function requestBody(req) {
   if (req.body && typeof req.body === "object") return req.body;
@@ -32,27 +32,25 @@ async function findEstimate(config, quoteCode, notificationToken) {
   return rows[0] || null;
 }
 
-async function downloadModel(config, filePath) {
+async function downloadPrivateFile(config, filePath, maximumBytes) {
   const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
   const response = await fetch(`${config.supabaseUrl}/storage/v1/object/authenticated/print-estimate-files/${encodedPath}`, {
     headers:headers(config.serviceKey),
     signal:AbortSignal.timeout(30000)
   });
-  if (!response.ok) throw new Error(`Private model download failed with status ${response.status}.`);
-  return Buffer.from(await response.arrayBuffer());
+  if (!response.ok) throw new Error(`Private file download failed with status ${response.status}.`);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (maximumBytes && bytes.length > maximumBytes) throw new Error("Private reference image exceeds the 10 MB limit.");
+  return bytes;
 }
 
-async function markMirrored(config, quoteCode, saved) {
+async function updateEstimate(config, quoteCode, changes) {
   const url = new URL(`${config.supabaseUrl}/rest/v1/print_estimates`);
   url.searchParams.set("quote_code", `eq.${quoteCode}`);
   const response = await fetch(url, {
     method:"PATCH",
     headers:headers(config.serviceKey, { "Content-Type":"application/json", Prefer:"return=minimal" }),
-    body:JSON.stringify({
-      drive_file_id:saved.id,
-      drive_web_view_link:saved.webViewLink,
-      drive_mirrored_at:new Date().toISOString()
-    }),
+    body:JSON.stringify(changes),
     signal:AbortSignal.timeout(8000)
   });
   if (!response.ok) throw new Error(`Drive status update failed with status ${response.status}.`);
@@ -60,21 +58,65 @@ async function markMirrored(config, quoteCode, saved) {
 
 async function mirrorEstimate(supabase, estimate) {
   const driveConfig = drive.configuration(await connection.storedRefreshToken(supabase));
-  if (!estimate || !estimate.file_path) return { accepted:true };
-  if (estimate.drive_file_id) {
-    if (/^https:\/\/drive\.google\.com\/drive\/folders\//.test(estimate.drive_web_view_link || "")) return { accepted:true };
+  if (!estimate) return { accepted:true };
+  const references = Array.isArray(estimate.reference_files) ? estimate.reference_files : [];
+  const mirroredReferences = Array.isArray(estimate.drive_reference_files) ? [...estimate.drive_reference_files] : [];
+  const mirroredPaths = new Set(mirroredReferences.map((item) => String(item?.path || "")));
+  const hasDriveFolder = /^https:\/\/drive\.google\.com\/drive\/folders\//.test(estimate.drive_web_view_link || "");
+  let mirrored = false;
+
+  if (estimate.file_path && estimate.drive_file_id && !hasDriveFolder) {
     const organized = await drive.organizeModel(driveConfig, { quoteCode:estimate.quote_code, fileId:estimate.drive_file_id });
-    await markMirrored(supabase, estimate.quote_code, organized);
-    return { mirrored:true, organized:true };
+    await updateEstimate(supabase, estimate.quote_code, {
+      drive_file_id:organized.id,
+      drive_web_view_link:organized.webViewLink,
+      drive_mirrored_at:new Date().toISOString()
+    });
+    estimate.drive_web_view_link = organized.webViewLink;
+    mirrored = true;
+  } else if (estimate.file_path && !estimate.drive_file_id) {
+    const bytes = await downloadPrivateFile(supabase, estimate.file_path);
+    const saved = await drive.uploadModel(driveConfig, {
+      bytes,
+      quoteCode:estimate.quote_code,
+      originalFileName:estimate.original_file_name,
+      storagePath:estimate.file_path,
+      itemType:"model"
+    });
+    await updateEstimate(supabase, estimate.quote_code, {
+      drive_file_id:saved.id,
+      drive_web_view_link:saved.webViewLink,
+      drive_mirrored_at:new Date().toISOString()
+    });
+    estimate.drive_web_view_link = saved.webViewLink;
+    mirrored = true;
   }
-  const bytes = await downloadModel(supabase, estimate.file_path);
-  const saved = await drive.uploadModel(driveConfig, {
-    bytes,
-    quoteCode:estimate.quote_code,
-    originalFileName:estimate.original_file_name
-  });
-  await markMirrored(supabase, estimate.quote_code, saved);
-  return { mirrored:true };
+
+  for (const reference of references) {
+    const path = String(reference?.path || "");
+    if (!path || mirroredPaths.has(path)) continue;
+    const bytes = await downloadPrivateFile(supabase, path, 10 * 1024 * 1024);
+    if (Number(reference.size_bytes) !== bytes.length) throw new Error("Private reference image size does not match its submission metadata.");
+    const saved = await drive.uploadModel(driveConfig, {
+      bytes,
+      quoteCode:estimate.quote_code,
+      originalFileName:reference.name,
+      storagePath:path,
+      itemType:"reference-image"
+    });
+    mirroredReferences.push({ path, name:String(reference.name || saved.name), drive_file_id:saved.id });
+    mirroredPaths.add(path);
+    await updateEstimate(supabase, estimate.quote_code, {
+      drive_reference_files:mirroredReferences,
+      drive_web_view_link:saved.webViewLink,
+      drive_mirrored_at:new Date().toISOString()
+    });
+    estimate.drive_web_view_link = saved.webViewLink;
+    mirrored = true;
+  }
+
+  if (!estimate.file_path && !references.length) return { accepted:true };
+  return { mirrored, referenceImages:mirroredReferences.length, accepted:!mirrored };
 }
 
 module.exports = async function handler(req, res) {

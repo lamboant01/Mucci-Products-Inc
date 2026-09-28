@@ -11,6 +11,9 @@ test("maps supported model formats to Drive upload content types", () => {
   assert.equal(drive.contentType("part.STL"), "model/stl");
   assert.equal(drive.contentType("part.3mf"), "model/3mf");
   assert.equal(drive.contentType("part.step"), "application/step");
+  assert.equal(drive.contentType("reference.PNG"), "image/png");
+  assert.equal(drive.contentType("reference.jpeg"), "image/jpeg");
+  assert.equal(drive.contentType("reference.HEIC"), "image/heic");
   assert.equal(drive.contentType("part.unknown"), "application/octet-stream");
 });
 
@@ -59,6 +62,7 @@ test("creates a quote-code subfolder and uploads the private model into it", { c
   assert.equal(calls[2].init.method, "POST");
   assert.match(calls[2].url, /uploadType=resumable/);
   assert.deepEqual(JSON.parse(calls[2].init.body).parents, ["quote-folder-12345"]);
+  assert.equal(JSON.parse(calls[2].init.body).appProperties.mucciItemType, "model");
   assert.equal(calls[3].init.method, "PUT");
   assert.equal(calls[3].init.body.toString(), "solid model");
 });

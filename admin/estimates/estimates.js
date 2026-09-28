@@ -162,6 +162,7 @@
       [estimate.service_intent === "DESIGN_AND_PRINT" ? "Preliminary print estimate" : "Physical print estimate", estimate.print_estimate_min == null ? "Not included" : `${displayPrice({ estimated_price:estimate.print_estimate_min, estimated_price_max:estimate.print_estimate_max })} CAD`],
       ["Estimated project total", `${displayPrice({ estimated_price:estimate.estimated_total_min ?? estimate.estimated_price, estimated_price_max:estimate.estimated_total_max ?? estimate.estimated_price_max })} CAD`],
       ["File status", label(estimate.file_status)], ["Uploaded file", estimate.original_file_name || (estimate.file_path ? "Uploaded model" : "Not provided")],
+      ["Reference images", `${Array.isArray(estimate.reference_files) ? estimate.reference_files.length : 0} attached`],
       ["Dimensions", dimensions],
       ["Split and assembly approved", estimate.split_and_assembly_accepted ? `Yes — approximately ${Number(estimate.estimated_section_count || 1)} printable sections` : "Not required"],
       ["Design level", label(estimate.design_level)]
@@ -176,12 +177,14 @@
     );
     rows.push(["Manual review", estimate.requires_manual_review ? "Required" : "Not required"], ["Current status", label(estimate.status)]);
     const hasDriveFolder = /^https:\/\/drive\.google\.com\/drive\/folders\//.test(estimate.drive_web_view_link || "");
-    return `<dl class="estimate-grid">${rows.map(([term, value]) => `<div><dt>${escapeHtml(term)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl><div class="card-actions"><button class="button button-secondary" type="button" data-copy-value="${escapeHtml(estimate.quote_code)}">Copy Quote Code</button>${estimate.email ? `<button class="button button-secondary" type="button" data-copy-value="${escapeHtml(estimate.email)}">Copy Customer Email</button>` : ""}${estimate.file_path ? '<button class="button button-secondary" id="open-file" type="button">Download Uploaded File</button>' : ""}${estimate.file_path && !hasDriveFolder ? '<button class="button button-secondary" id="organize-drive" type="button">Create Drive Quote Folder</button>' : ""}${hasDriveFolder ? `<a class="button button-secondary" href="${escapeHtml(estimate.drive_web_view_link)}" target="_blank" rel="noopener noreferrer">Open Drive Folder</a>` : ""}</div>`;
+    const hasAttachments = Boolean(estimate.file_path || estimate.reference_files?.length);
+    return `<dl class="estimate-grid">${rows.map(([term, value]) => `<div><dt>${escapeHtml(term)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl><div class="card-actions"><button class="button button-secondary" type="button" data-copy-value="${escapeHtml(estimate.quote_code)}">Copy Quote Code</button>${estimate.email ? `<button class="button button-secondary" type="button" data-copy-value="${escapeHtml(estimate.email)}">Copy Customer Email</button>` : ""}${estimate.file_path ? '<button class="button button-secondary" id="open-file" type="button">Download Uploaded File</button>' : ""}${hasAttachments && !hasDriveFolder ? '<button class="button button-secondary" id="organize-drive" type="button">Create Drive Quote Folder</button>' : ""}${hasDriveFolder ? `<a class="button button-secondary" href="${escapeHtml(estimate.drive_web_view_link)}" target="_blank" rel="noopener noreferrer">Open Drive Folder</a>` : ""}</div>`;
   }
 
   function checklistMarkup(estimate) {
     const items = [];
     if (estimate.file_path) items.push("File reviewed", "Dimensions confirmed");
+    if (estimate.reference_files?.length) items.push("Reference images reviewed");
     if (estimate.service_intent !== "DESIGN_ONLY") items.push("Material confirmed", "Colour confirmed", "Quantity confirmed");
     if (estimate.design_level && estimate.design_level !== "none") items.push("Design requirement confirmed");
     items.push("Final price confirmed");
@@ -317,7 +320,7 @@
     const original = button.textContent;
     button.disabled = true;
     button.textContent = "Creating Drive folder…";
-    status.textContent = "Creating the private quote folder and copying the uploaded model…";
+    status.textContent = "Creating the private quote folder and copying the uploaded files…";
     try {
       const payload = await apiRequest("mirror_drive", { estimateId:activeEstimate.id });
       if (!payload.mirrored && !payload.organized && !payload.accepted) {

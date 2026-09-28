@@ -9,9 +9,13 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
   const message = document.querySelector("#form-message");
   const config = window.MUCCI_CONFIG || {};
   const maxFileBytes = 25 * 1024 * 1024;
+  const maxReferenceImageBytes = 10 * 1024 * 1024;
+  const maxReferenceImages = 10;
   const maxPrintableSectionDimensionMm = 250;
   const maxFinishedDimensionMm = 1000;
   const supportedExtensions = ["stl", "3mf", "obj", "step", "stp"];
+  const supportedReferenceExtensions = ["png", "jpg", "jpeg", "webp", "heic", "heif", "gif"];
+  const referenceContentTypes = Object.freeze({ png:"image/png", jpg:"image/jpeg", jpeg:"image/jpeg", webp:"image/webp", heic:"image/heic", heif:"image/heif", gif:"image/gif" });
   const gcodeTime = window.MucciGcodeTime;
   let calculatedPayload = null;
   let calculatedResult = null;
@@ -174,6 +178,27 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
     return { file, extension };
   }
 
+  function validateReferenceImages() {
+    const files = [...document.querySelector("#reference-images").files];
+    if (files.length > maxReferenceImages) throw validationError(`Choose no more than ${maxReferenceImages} reference images.`);
+    return files.map((file) => {
+      const extension = file.name.split(".").pop().toLowerCase();
+      if (!supportedReferenceExtensions.includes(extension)) throw validationError(`${file.name} is not a supported image. Choose PNG, JPEG, WebP, HEIC, HEIF, or GIF.`);
+      if (file.size <= 0 || file.size > maxReferenceImageBytes) throw validationError(`${file.name} must be 10 MB or smaller.`);
+      return { file, extension, contentType:referenceContentTypes[extension] };
+    });
+  }
+
+  function updateReferenceImageStatus() {
+    const status = document.querySelector("#reference-images-status");
+    try {
+      const files = validateReferenceImages();
+      status.textContent = files.length ? `${files.length} reference image${files.length === 1 ? "" : "s"} ready to upload with this quote.` : "";
+    } catch (error) {
+      status.textContent = error.message;
+    }
+  }
+
   async function handleModelFile(event) {
     const preview = document.querySelector("#model-preview");
     const status = document.querySelector("#model-status");
@@ -290,11 +315,21 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
       const physicalPrinting = includesPhysicalPrinting(intent);
       const submittedDimensions = values.file_status === "design" ? dimensionsToMm({ length:values.dimension_length, width:values.dimension_width, height:values.dimension_height, unit:values.dimension_unit }, maxFinishedDimensionMm) : null;
       const selectedFile = validateFile();
+      const selectedReferenceImages = validateReferenceImages();
+      const uploadRoot = crypto.randomUUID();
       let filePath = null;
       if (selectedFile) {
-        filePath = `${crypto.randomUUID()}/${crypto.randomUUID()}.${selectedFile.extension}`;
+        filePath = `${uploadRoot}/${crypto.randomUUID()}.${selectedFile.extension}`;
         const { error: uploadError } = await client.storage.from("print-estimate-files").upload(filePath, selectedFile.file, { upsert:false, contentType:selectedFile.file.type || "application/octet-stream" });
         if (uploadError) throw new Error(`The file could not be uploaded: ${uploadError.message}`);
+      }
+      const referenceFiles = [];
+      if (selectedReferenceImages.length) submitButton.textContent = "Uploading reference images…";
+      for (const reference of selectedReferenceImages) {
+        const path = `${uploadRoot}/references/${crypto.randomUUID()}.${reference.extension}`;
+        const { error:uploadError } = await client.storage.from("print-estimate-files").upload(path, reference.file, { upsert:false, contentType:reference.contentType });
+        if (uploadError) throw new Error(`${reference.file.name} could not be uploaded: ${uploadError.message}`);
+        referenceFiles.push({ path, name:reference.file.name, content_type:reference.contentType, size_bytes:reference.file.size });
       }
       const { data, error } = await client.rpc("submit_service_estimate", {
         ...calculatedPayload,
@@ -308,7 +343,8 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
         p_desired_colours: physicalPrinting ? values.desired_colours.trim() : null,
         p_print_time_source: intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? "virtual_bounding_box" : physicalPrinting ? "slicer" : "unknown",
         p_print_profile: intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? "standard" : physicalPrinting ? values.print_profile : null,
-        p_notes: values.notes.trim() || null
+        p_notes: values.notes.trim() || null,
+        p_reference_files:referenceFiles
       });
       if (error) throw error;
       const submission = Array.isArray(data) ? data[0] : data;
@@ -318,7 +354,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
       }).then((response) => { if (!response.ok) console.error(`${url} could not process the saved estimate.`); });
       void Promise.allSettled([
         trigger("/api/estimate-notification"),
-        ...(filePath ? [trigger("/api/estimate-drive")] : [])
+        ...(filePath || referenceFiles.length ? [trigger("/api/estimate-drive")] : [])
       ]);
       renderSuccess(submission);
     } catch (error) {
@@ -359,6 +395,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
     if (["dimension_length", "dimension_width", "dimension_height", "dimension_unit"].includes(event.target.name)) updateSplitConfirmation();
   });
   document.querySelector("#model-file").addEventListener("change", handleModelFile);
+  document.querySelector("#reference-images").addEventListener("change", updateReferenceImageStatus);
   form.addEventListener("submit", calculate);
   updateConditionalFields();
   (async function loadPublicOptions() {

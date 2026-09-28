@@ -4,7 +4,9 @@ const { OAuth2Client } = require("google-auth-library");
 
 const MIME_TYPES = {
   stl:"model/stl", "3mf":"model/3mf", obj:"model/obj",
-  step:"application/step", stp:"application/step"
+  step:"application/step", stp:"application/step",
+  png:"image/png", jpg:"image/jpeg", jpeg:"image/jpeg", webp:"image/webp",
+  heic:"image/heic", heif:"image/heif", gif:"image/gif"
 };
 
 function oauthConfiguration() {
@@ -121,7 +123,11 @@ async function uploadWithAccessToken(token, config, model) {
     name,
     parents:[folder.id],
     description:`Mucci Products 3D printing estimate ${model.quoteCode}`,
-    appProperties:{ mucciQuoteCode:model.quoteCode }
+    appProperties:{
+      mucciQuoteCode:model.quoteCode,
+      mucciItemType:model.itemType || "model",
+      ...(model.storagePath ? { mucciStoragePath:String(model.storagePath).slice(0, 124) } : {})
+    }
   };
   const session = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,webViewLink", {
     method:"POST",

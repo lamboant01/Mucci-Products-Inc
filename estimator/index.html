@@ -140,9 +140,17 @@
             <p class="help">Assembly projects start at +<span id="assembly-price">…</span> CAD and require manual confirmation.</p>
           </fieldset>
 
-          <fieldset>
+          <fieldset id="details-section">
             <legend><span>7</span> Project details</legend>
-            <label class="field">Anything else we should know?<textarea name="notes" maxlength="3000" rows="4"></textarea></label>
+            <label class="field">Anything else we should know?
+              <textarea name="notes" maxlength="3000" rows="5"></textarea>
+              <small>Be as specific as possible about dimensions, purpose, fit, finish, strength, moving parts, references, and any must-have details. Complete information helps avoid delays caused by follow-up questions.</small>
+            </label>
+            <label class="field">Reference images
+              <input id="reference-images" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.heic,.heif,.gif,image/png,image/jpeg,image/webp,image/heic,image/heif,image/gif" />
+              <small>Optional. Add drawings, measurements, screenshots, inspiration, or photos that clarify the request. Up to 10 images, maximum 10 MB each. Images are kept private and organized with this quote.</small>
+            </label>
+            <p id="reference-images-status" class="import-status" role="status"></p>
             <label class="field">Name <small>Optional. Your Etsy conversation is the contact method for this estimate.</small><input name="name" maxlength="120" autocomplete="name" /></label>
           </fieldset>
 

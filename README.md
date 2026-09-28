@@ -11,7 +11,12 @@ served only from a private server-configured path and is not linked publicly.
 Customers upload an STL, 3MF, OBJ, STEP, or STP model, inspect it in an
 interactive 3D preview, and have it converted to G-code locally in a Web Worker
 with the vendored Three Slicer WASM engine. Standard Detail (0.20 mm) and
-Efficient Larger Prints (0.24 mm) profiles affect the calculated time. The fixed
+Efficient Larger Prints (0.24 mm) profiles affect the calculated time. Both use
+50 mm/s for the initial layer and a conservative 200 mm/s general print speed.
+The current browser slicer exposes one general speed, so the A1 slicer's more
+specific 105 mm/s initial infill, 230 mm/s inner/infill, 50% small-perimeter,
+and 80% vertical-shell values are retained as documented reference settings but
+are not falsely presented as active per-feature controls. The fixed
 0.4 mm nozzle, three walls, and
 30% infill are defined in `estimator/slicer-config.js` and are not shown in the
 customer interface. Multi-colour purge allowances are stored centrally in the
@@ -36,6 +41,11 @@ owner email, and admin review. Printing requests also require the customer's
 wanted colour names or shades, with a clear notice that the closest filament
 match depends on current market availability.
 
+Customers can also attach up to 10 PNG, JPEG, WebP, HEIC, HEIF, or GIF reference
+images, each no larger than 10 MB. The form asks for specific project details to
+reduce follow-up delays. Reference images remain private and are copied into the
+same quote-code Google Drive folder as the uploaded model.
+
 The printer build volume remains 250 × 250 × 250 mm. Finished dimensions up to
 1000 mm per axis are accepted for no-file design requests. If any finished
 dimension exceeds 250 mm, the customer must approve splitting the design into
@@ -51,7 +61,7 @@ on the pinned Three.js and OCCT browser modules. The AGPL Three Slicer engine,
 its licence, and its third-party notices are kept under
 `estimator/vendor/three-slicer/` so the worker does not depend on a remote path.
 
-Run migrations 004 through 018 in order after migrations 001 through 003. All
+Run migrations 004 through 019 in order after migrations 001 through 003. All
 private pricing values and fallback-time assumptions are centralized in
 the single-row `print_estimator_config` table created by that migration. Update
 that row in Supabase to change pricing without editing the public website.
@@ -122,6 +132,9 @@ Migration `018_estimator_material_and_oversized_upgrade.sql` upgrades databases
 where an earlier version of migration 017 was already applied, installs the
 current PLA/PETG and oversized-part RPC signatures, and refreshes the PostgREST
 schema cache.
+Migration `019_reference_images_and_a1_speed_update.sql` adds validated private
+reference-image metadata, narrow upload policies, and the submission RPC used
+by the attachment-enabled form.
 
 The protected admin area is available at `/admin` after Google sign-in and now
 includes Dashboard, Requests / Estimates, Orders / Projects, Customers,
