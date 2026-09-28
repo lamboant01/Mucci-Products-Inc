@@ -7,7 +7,7 @@ const ESTIMATE_SELECT = [
   "id", "quote_code", "name", "email", "status", "created_at", "updated_at",
   "quantity", "final_quantity", "material", "final_price", "estimated_price", "estimated_price_max",
   "estimated_production_hours", "estimated_production_hours_max", "requires_manual_review",
-  "file_path", "original_file_name", "drive_web_view_link", "drive_mirrored_at",
+  "file_path", "original_file_name", "reference_files", "drive_file_id", "drive_reference_files", "drive_web_view_link", "drive_mirrored_at",
   "email_notification_sent_at", "admin_notes", "clarification_notes", "completed_at"
 ].join(",");
 
@@ -41,6 +41,17 @@ function customersFrom(estimates) {
   return [...customers.values()].sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen));
 }
 
+function quoteFoldersFrom(estimates) {
+  return estimates.map((item) => ({
+    id:item.id, quote_code:item.quote_code, name:item.name, created_at:item.created_at,
+    original_file_name:item.original_file_name,
+    source_file_count:(item.file_path ? 1 : 0) + (Array.isArray(item.reference_files) ? item.reference_files.length : 0),
+    drive_file_count:(item.drive_file_id ? 1 : 0) + (Array.isArray(item.drive_reference_files) ? item.drive_reference_files.length : 0),
+    drive_web_view_link:item.drive_web_view_link,
+    drive_status:item.drive_mirrored_at ? "mirrored" : item.drive_web_view_link ? "linked" : "not_mirrored"
+  }));
+}
+
 async function loadOperations(config) {
   const estimates = await db.select(config, "print_estimates", {
     select:ESTIMATE_SELECT, order:"created_at.desc", limit:"500"
@@ -66,11 +77,7 @@ async function loadOperations(config) {
   const activeStatuses = new Set(["accepted", "in_production"]);
   const awaitingStatuses = new Set(["pending", "reviewed", "etsy_prepared", "awaiting_customer"]);
   const orders = estimates.filter((item) => activeStatuses.has(item.status) || item.status === "completed");
-  const files = estimates.filter((item) => item.file_path).map((item) => ({
-    id:item.id, quote_code:item.quote_code, name:item.name, created_at:item.created_at,
-    original_file_name:item.original_file_name, has_storage_file:Boolean(item.file_path),
-    drive_status:item.drive_mirrored_at ? "mirrored" : item.drive_web_view_link ? "linked" : "not_mirrored"
-  }));
+  const files = quoteFoldersFrom(estimates);
   const actionRequired = estimates.filter((item) => awaitingStatuses.has(item.status) || item.requires_manual_review);
 
   return {
@@ -114,3 +121,4 @@ module.exports = async function handler(req, res) {
 
 module.exports.customersFrom = customersFrom;
 module.exports.loadOperations = loadOperations;
+module.exports.quoteFoldersFrom = quoteFoldersFrom;

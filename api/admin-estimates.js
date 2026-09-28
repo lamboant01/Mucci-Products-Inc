@@ -4,9 +4,14 @@ const auth = require("./_admin-auth");
 const db = require("./_admin-supabase");
 const listing = require("./_etsy-listing");
 const estimateDrive = require("./estimate-drive");
+const drive = require("./_google-drive");
+const driveConnection = require("./_google-drive-connection");
 
 const QUOTE_PATTERN = /^MP-[A-HJ-NP-Z2-9]{5}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const DRIVE_FILE_ID_PATTERN = /^[A-Za-z0-9_-]{10,200}$/;
+const QUOTE_FILE_EXTENSIONS = new Set(["stl","3mf","obj","step","stp","dxf","png","jpg","jpeg","webp","heic","heif","gif","svg","pdf","zip","txt"]);
+const MAX_QUOTE_FILE_BYTES = 25 * 1024 * 1024;
 
 function quote(value) { return String(value || "").trim().toUpperCase(); }
 function uuid(value) { const clean = String(value || "").toLowerCase(); return UUID_PATTERN.test(clean) ? clean : ""; }
@@ -43,6 +48,19 @@ function reviewValues(body) {
 async function findById(config, estimateId) {
   const rows = await db.select(config, "print_estimates", { id:`eq.${estimateId}`, select:"*", limit:"1" });
   return rows?.[0] || null;
+}
+
+async function connectedDrive(config) {
+  return drive.configuration(await driveConnection.storedRefreshToken(config));
+}
+
+function quoteUpload(body) {
+  const originalName = String(body.fileName || "").replace(/[\u0000-\u001f\u007f]/g, "").trim();
+  const extension = originalName.split(".").pop().toLowerCase();
+  const size = Number(body.fileSize);
+  if (!originalName || originalName.length > 220 || !QUOTE_FILE_EXTENSIONS.has(extension)) throw new Error("Unsupported quote file.");
+  if (!Number.isInteger(size) || size < 1 || size > MAX_QUOTE_FILE_BYTES) throw new Error("Quote files must be 25 MB or smaller.");
+  return { originalName, size, contentType:drive.contentType(originalName) };
 }
 
 async function handleAction(config, user, body) {
@@ -114,6 +132,48 @@ async function handleAction(config, user, body) {
       const result = await estimateDrive.mirrorEstimate(config, estimate);
       await logActivity(config, user, { action:"file_mirrored", estimateId, summary:`Private file organized in Google Drive for ${estimate.quote_code}.` });
       return result;
+    }
+    case "drive_files": {
+      const estimateId = uuid(body.estimateId);
+      if (!estimateId) throw new Error("Invalid estimate.");
+      const estimate = await findById(config, estimateId);
+      if (!estimate) throw new Error("Estimate not found.");
+      const result = await drive.listQuoteFiles(await connectedDrive(config), estimate.quote_code);
+      if (estimate.drive_web_view_link !== result.folder.webViewLink) {
+        await db.patch(config, "print_estimates", { id:`eq.${estimateId}` }, { drive_web_view_link:result.folder.webViewLink });
+      }
+      return { quoteCode:estimate.quote_code, folder:result.folder, files:result.files };
+    }
+    case "drive_upload_start": {
+      const estimateId = uuid(body.estimateId);
+      if (!estimateId) throw new Error("Invalid estimate.");
+      const estimate = await findById(config, estimateId);
+      if (!estimate) throw new Error("Estimate not found.");
+      const upload = quoteUpload(body);
+      const result = await drive.startQuoteUpload(await connectedDrive(config), {
+        quoteCode:estimate.quote_code,
+        originalFileName:upload.originalName,
+        contentType:upload.contentType,
+        size:upload.size
+      });
+      await db.patch(config, "print_estimates", { id:`eq.${estimateId}` }, { drive_web_view_link:result.folder.webViewLink });
+      return { uploadUrl:result.uploadUrl, contentType:result.contentType, folder:result.folder };
+    }
+    case "drive_upload_complete": {
+      const estimateId = uuid(body.estimateId);
+      const fileId = String(body.fileId || "");
+      if (!estimateId || !DRIVE_FILE_ID_PATTERN.test(fileId)) throw new Error("Invalid uploaded file.");
+      const estimate = await findById(config, estimateId);
+      if (!estimate) throw new Error("Estimate not found.");
+      const result = await drive.listQuoteFiles(await connectedDrive(config), estimate.quote_code);
+      const uploaded = result.files.find((file) => file.id === fileId);
+      if (!uploaded) throw new Error("Uploaded file was not found in the quote folder.");
+      await db.patch(config, "print_estimates", { id:`eq.${estimateId}` }, {
+        drive_web_view_link:result.folder.webViewLink,
+        drive_mirrored_at:new Date().toISOString()
+      });
+      await logActivity(config, user, { action:"quote_file_uploaded", estimateId, summary:`${uploaded.name} uploaded to Drive for ${estimate.quote_code}.`, metadata:{ drive_file_id:fileId } });
+      return { file:uploaded, folder:result.folder };
     }
     case "signed_file": {
       const estimateId = uuid(body.estimateId);

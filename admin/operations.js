@@ -11,6 +11,12 @@
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" })[character]);
   const date = (value) => value ? new Date(value).toLocaleString("en-CA", { dateStyle:"medium", timeStyle:"short" }) : "Not available";
   const money = (value) => Number(value || 0).toLocaleString("en-CA", { style:"currency", currency:"CAD" });
+  const fileSize = (value) => {
+    const bytes = Number(value || 0);
+    if (!bytes) return "Size unavailable";
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
   const status = (value) => labels[value] || String(value || "Unknown").replaceAll("_", " ");
   const estimateUrl = (code) => `/admin/estimates?quote=${encodeURIComponent(code)}`;
 
@@ -77,8 +83,8 @@
   }
 
   function renderFiles(data) {
-    root.innerHTML = `${controls("Search by file, quote code, or customer", '<select id="status-filter" aria-label="Filter by Drive status"><option value="all">All file states</option><option value="mirrored">Mirrored to Drive</option><option value="not_mirrored">Not mirrored</option></select>')}<div id="operations-results"></div>`;
-    bindFilter(data.files, (item, query, selected) => (selected === "all" || item.drive_status === selected) && [item.original_file_name, item.quote_code, item.name].join(" ").toLowerCase().includes(query), (items) => items.length ? `<div class="responsive-table"><table><thead><tr><th>File</th><th>Request</th><th>Customer</th><th>Supabase</th><th>Google Drive</th><th></th></tr></thead><tbody>${items.map((file) => `<tr><td><strong>${escapeHtml(file.original_file_name || "Uploaded model")}</strong><small>${escapeHtml(date(file.created_at))}</small></td><td>${escapeHtml(file.quote_code)}</td><td>${escapeHtml(file.name || "Name not provided")}</td><td><span class="file-state ok">Available</span></td><td><span class="file-state ${file.drive_status === "mirrored" ? "ok" : "neutral"}">${escapeHtml(file.drive_status === "mirrored" ? "Mirrored" : "Not mirrored")}</span></td><td><button class="table-link file-open" type="button" data-id="${escapeHtml(file.id)}">Open securely</button></td></tr>`).join("")}</tbody></table></div>` : '<div class="empty-state">No files match this search.</div>', bindFileButtons);
+    root.innerHTML = `<div class="operations-alert"><strong>One private folder per quote.</strong><span>View and download existing files or add a late customer file. Files cannot be deleted here.</span></div>${controls("Search by quote code or customer", '<select id="status-filter" aria-label="Filter by Drive status"><option value="all">All folder states</option><option value="mirrored">Contains mirrored files</option><option value="linked">Drive folder created</option><option value="not_mirrored">Folder not created</option></select>')}<div id="operations-results"></div><section id="quote-file-manager" class="quote-file-manager" hidden aria-live="polite"></section>`;
+    bindFilter(data.files, (item, query, selected) => (selected === "all" || item.drive_status === selected) && [item.quote_code, item.name, item.original_file_name].join(" ").toLowerCase().includes(query), (items) => items.length ? `<div class="responsive-table"><table><thead><tr><th>Quote folder</th><th>Customer</th><th>Submitted files</th><th>Google Drive</th><th></th></tr></thead><tbody>${items.map((folder) => `<tr><td><strong>${escapeHtml(folder.quote_code)}</strong><small>${escapeHtml(date(folder.created_at))}</small></td><td>${escapeHtml(folder.name || "Name not provided")}</td><td>${escapeHtml(folder.source_file_count)} received</td><td><span class="file-state ${folder.drive_status === "mirrored" ? "ok" : "neutral"}">${escapeHtml(folder.drive_status === "mirrored" ? "Files mirrored" : folder.drive_status === "linked" ? "Folder ready" : "Not created")}</span>${folder.drive_file_count ? `<small>${escapeHtml(folder.drive_file_count)} submission file${folder.drive_file_count === 1 ? "" : "s"} mirrored</small>` : ""}</td><td><div class="table-actions">${folder.drive_web_view_link ? `<a class="table-link" href="${escapeHtml(folder.drive_web_view_link)}" target="_blank" rel="noopener noreferrer">Open Drive</a>` : ""}<button class="table-link folder-manage" type="button" data-id="${escapeHtml(folder.id)}" data-code="${escapeHtml(folder.quote_code)}">Manage files</button></div></td></tr>`).join("")}</tbody></table></div>` : '<div class="empty-state">No quote folders match this search.</div>', bindFolderButtons);
   }
 
   function renderActivity(data) {
@@ -105,21 +111,53 @@
     update();
   }
 
-  function bindFileButtons() {
-    document.querySelectorAll(".file-open").forEach((button) => button.addEventListener("click", async () => {
-      const original = button.textContent;
-      button.disabled = true;
-      button.textContent = "Creating link…";
-      try {
-        const payload = await api("/api/admin-estimates", { action:"signed_file", estimateId:button.dataset.id });
-        window.open(payload.signedUrl, "_blank", "noopener,noreferrer");
-      } catch (error) {
-        window.alert(error.message);
-      } finally {
-        button.disabled = false;
-        button.textContent = original;
-      }
-    }));
+  function bindFolderButtons() {
+    document.querySelectorAll(".folder-manage").forEach((button) => button.addEventListener("click", () => openQuoteFolder(button.dataset.id, button.dataset.code)));
+  }
+
+  async function openQuoteFolder(estimateId, quoteCode) {
+    const manager = document.querySelector("#quote-file-manager");
+    manager.hidden = false;
+    manager.innerHTML = `<div class="loading-state" role="status">Loading ${escapeHtml(quoteCode)} files…</div>`;
+    manager.scrollIntoView({ behavior:"smooth", block:"start" });
+    try {
+      const payload = await api("/api/admin-estimates", { action:"drive_files", estimateId });
+      const files = payload.files || [];
+      manager.innerHTML = `<div class="quote-file-heading"><div><p class="eyebrow">Private quote folder</p><h2>${escapeHtml(payload.quoteCode)}</h2></div><a class="button button-secondary" href="${escapeHtml(payload.folder.webViewLink)}" target="_blank" rel="noopener noreferrer">Open in Google Drive</a></div>
+        <div class="quote-folder-files">${files.length ? files.map((file) => `<article><div><strong>${escapeHtml(file.name)}</strong><small>${escapeHtml(fileSize(file.size))} · Updated ${escapeHtml(date(file.modifiedTime))}</small></div><div class="table-actions"><a class="table-link" href="${escapeHtml(file.webViewLink)}" target="_blank" rel="noopener noreferrer">View</a>${file.webContentLink ? `<a class="table-link" href="${escapeHtml(file.webContentLink)}" target="_blank" rel="noopener noreferrer">Download</a>` : ""}</div></article>`).join("") : '<div class="empty-state">This quote folder is empty.</div>'}</div>
+        <form class="quote-file-upload"><label>Upload a late customer file<input id="quote-file-upload" type="file" accept=".stl,.3mf,.obj,.step,.stp,.dxf,.png,.jpg,.jpeg,.webp,.heic,.heif,.gif,.svg,.pdf,.zip,.txt" required><small>Models, images, PDF, ZIP, DXF, SVG, or text. Maximum 25 MB. Uploads go directly into this private Drive folder.</small></label><button class="button button-primary" type="submit">Upload file</button><p class="form-status" role="status"></p></form>`;
+      manager.querySelector("form").addEventListener("submit", (event) => uploadQuoteFile(event, estimateId, quoteCode));
+    } catch (error) {
+      manager.innerHTML = `<div class="empty-state error-state"><strong>Could not open this quote folder.</strong><p>${escapeHtml(error.message)}</p><button class="button button-secondary folder-retry" type="button">Try again</button></div>`;
+      manager.querySelector(".folder-retry").addEventListener("click", () => openQuoteFolder(estimateId, quoteCode));
+    }
+  }
+
+  async function uploadQuoteFile(event, estimateId, quoteCode) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const input = form.querySelector('input[type="file"]');
+    const button = form.querySelector('button[type="submit"]');
+    const status = form.querySelector('[role="status"]');
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) { status.textContent = "Choose a file no larger than 25 MB."; return; }
+    button.disabled = true;
+    button.textContent = "Uploading…";
+    status.textContent = "Creating a secure Google Drive upload…";
+    try {
+      const session = await api("/api/admin-estimates", { action:"drive_upload_start", estimateId, fileName:file.name, fileSize:file.size });
+      const upload = await fetch(session.uploadUrl, { method:"PUT", headers:{ "Content-Type":session.contentType }, body:file });
+      if (!upload.ok) throw new Error(`Google Drive upload failed with status ${upload.status}.`);
+      const saved = await upload.json();
+      if (!saved.id) throw new Error("Google Drive did not return the uploaded file.");
+      await api("/api/admin-estimates", { action:"drive_upload_complete", estimateId, fileId:saved.id });
+      await openQuoteFolder(estimateId, quoteCode);
+    } catch (error) {
+      status.textContent = error.message || "The file could not be uploaded.";
+      button.disabled = false;
+      button.textContent = "Upload file";
+    }
   }
 
   async function init() {

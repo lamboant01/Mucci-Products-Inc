@@ -91,6 +91,11 @@ must remain private. Supabase stays the primary private file store, so a Drive
 outage does not block estimate submission; after a successful mirror, the admin
 portal shows an **Open in Google Drive** link. Each quote is stored in a private
 subfolder named after its quote code, and retries reuse that folder.
+The protected **Files** tab lists one folder for every quote, can display the
+files created by the app in that Drive folder, and provides private View and
+Download links. An authenticated administrator can upload a late customer file
+of an approved type, up to 25 MB, directly into the same folder. The interface
+intentionally has no file-delete action.
 
 The public Etsy shop destination is set as `etsyUrl` and the private admin
 Messages destination is set as `etsyMessagesUrl` in `config.js`. No additional

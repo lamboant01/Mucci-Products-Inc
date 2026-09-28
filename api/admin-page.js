@@ -35,7 +35,7 @@ function adminBody(section, user) {
     dashboard:["Operations overview", "Dashboard", "Current requests, production work, customers, files, and recent administrative activity."],
     orders:["Production", "Orders / Projects", "Accepted, in-production, and completed estimate records. No separate ERP records are created."],
     customers:["Contacts", "Customers", "Customer contacts derived from estimate submissions and their request history."],
-    files:["Private files", "Files", "Uploaded model availability and private Google Drive mirror status."],
+    files:["Private files", "Quote Files", "Open each private quote folder, view or download its files, and add late customer files without allowing deletion."],
     activity:["Audit trail", "Admin Activity", "Important administrator changes. Secrets and authentication tokens are never recorded."]
   };
   const [eyebrow, heading, intro] = titles[section] || titles.dashboard;

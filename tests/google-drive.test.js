@@ -132,3 +132,43 @@ test("moves an existing mirrored file into its quote-code subfolder", { concurre
   assert.equal(moveUrl.searchParams.get("removeParents"), "private-folder");
   assert.equal(result.webViewLink, "https://drive.google.com/drive/folders/quote-folder");
 });
+
+test("lists viewable and downloadable files inside one quote folder", { concurrency:false }, async (context) => {
+  const originalFetch = global.fetch;
+  context.after(() => { global.fetch = originalFetch; });
+  const calls = [];
+  global.fetch = async (url, init = {}) => {
+    calls.push({ url:String(url), init });
+    if (calls.length === 1) return new Response(JSON.stringify({ files:[{ id:"folder-123456", name:"MP-Y59NE", webViewLink:"https://drive.google.com/drive/folders/folder-123456" }] }), { status:200 });
+    return new Response(JSON.stringify({ files:[{
+      id:"file-123456789", name:"customer-photo.jpg", mimeType:"image/jpeg", size:"2048",
+      modifiedTime:"2026-09-28T12:00:00Z", webViewLink:"https://drive.google.com/file/d/file-123456789/view",
+      webContentLink:"https://drive.google.com/uc?id=file-123456789&export=download"
+    }] }), { status:200 });
+  };
+  const result = await drive.listQuoteFilesWithAccessToken("token", { folderId:"root-folder" }, "MP-Y59NE");
+  assert.equal(result.folder.id, "folder-123456");
+  assert.equal(result.files.length, 1);
+  assert.equal(result.files[0].size, 2048);
+  assert.match(result.files[0].webContentLink, /export=download/);
+  assert.match(new URL(calls[1].url).searchParams.get("q"), /folder-123456/);
+});
+
+test("starts a constrained admin upload in the existing quote folder", { concurrency:false }, async (context) => {
+  const originalFetch = global.fetch;
+  context.after(() => { global.fetch = originalFetch; });
+  const calls = [];
+  global.fetch = async (url, init = {}) => {
+    calls.push({ url:String(url), init });
+    if (calls.length === 1) return new Response(JSON.stringify({ files:[{ id:"folder-123456", name:"MP-Y59NE" }] }), { status:200 });
+    return new Response(null, { status:200, headers:{ location:"https://www.googleapis.com/upload/drive/v3/files?upload_id=admin" } });
+  };
+  const result = await drive.startQuoteUploadWithAccessToken("token", { folderId:"root-folder" }, {
+    quoteCode:"MP-Y59NE", originalFileName:"last-minute.pdf", contentType:"application/pdf", size:4096
+  });
+  assert.match(result.uploadUrl, /upload_id=admin/);
+  const metadata = JSON.parse(calls[1].init.body);
+  assert.deepEqual(metadata.parents, ["folder-123456"]);
+  assert.equal(metadata.appProperties.mucciItemType, "admin-upload");
+  assert.equal(calls[1].init.headers["X-Upload-Content-Length"], "4096");
+});

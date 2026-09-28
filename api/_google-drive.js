@@ -6,7 +6,8 @@ const MIME_TYPES = {
   stl:"model/stl", "3mf":"model/3mf", obj:"model/obj",
   step:"application/step", stp:"application/step",
   png:"image/png", jpg:"image/jpeg", jpeg:"image/jpeg", webp:"image/webp",
-  heic:"image/heic", heif:"image/heif", gif:"image/gif"
+  heic:"image/heic", heif:"image/heif", gif:"image/gif", svg:"image/svg+xml",
+  pdf:"application/pdf", zip:"application/zip", dxf:"application/dxf", txt:"text/plain"
 };
 
 function oauthConfiguration() {
@@ -115,6 +116,64 @@ async function quoteFolder(token, config, quoteCode) {
   return folderResult(await created.json(), quoteCode);
 }
 
+function driveFileResult(value) {
+  return {
+    id:String(value?.id || ""),
+    name:String(value?.name || "Untitled file"),
+    mimeType:String(value?.mimeType || "application/octet-stream"),
+    size:Number(value?.size || 0),
+    createdTime:String(value?.createdTime || ""),
+    modifiedTime:String(value?.modifiedTime || ""),
+    webViewLink:String(value?.webViewLink || ""),
+    webContentLink:String(value?.webContentLink || "")
+  };
+}
+
+async function listQuoteFilesWithAccessToken(token, config, quoteCode) {
+  const folder = await quoteFolder(token, config, quoteCode);
+  const listUrl = new URL("https://www.googleapis.com/drive/v3/files");
+  listUrl.searchParams.set("q", `'${driveQueryValue(folder.id)}' in parents and trashed = false`);
+  listUrl.searchParams.set("spaces", "drive");
+  listUrl.searchParams.set("pageSize", "100");
+  listUrl.searchParams.set("orderBy", "modifiedTime desc");
+  listUrl.searchParams.set("fields", "files(id,name,mimeType,size,createdTime,modifiedTime,webViewLink,webContentLink)");
+  listUrl.searchParams.set("supportsAllDrives", "true");
+  listUrl.searchParams.set("includeItemsFromAllDrives", "true");
+  const response = await fetch(listUrl, {
+    headers:{ Authorization:`Bearer ${token}` },
+    signal:AbortSignal.timeout(12000)
+  });
+  if (!response.ok) throw new Error(`Google Drive quote file lookup failed with status ${response.status}.`);
+  const result = await response.json();
+  return { folder, files:(result.files || []).map(driveFileResult).filter((file) => file.id) };
+}
+
+async function startQuoteUploadWithAccessToken(token, config, upload) {
+  const folder = await quoteFolder(token, config, upload.quoteCode);
+  const name = fileName(upload.originalFileName, upload.quoteCode);
+  const type = upload.contentType || contentType(name);
+  const session = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,mimeType,size,createdTime,modifiedTime,webViewLink,webContentLink", {
+    method:"POST",
+    headers:{
+      Authorization:`Bearer ${token}`,
+      "Content-Type":"application/json; charset=UTF-8",
+      "X-Upload-Content-Type":type,
+      "X-Upload-Content-Length":String(upload.size)
+    },
+    body:JSON.stringify({
+      name,
+      parents:[folder.id],
+      description:`Mucci Products quote file ${upload.quoteCode}`,
+      appProperties:{ mucciQuoteCode:upload.quoteCode, mucciItemType:"admin-upload" }
+    }),
+    signal:AbortSignal.timeout(12000)
+  });
+  if (!session.ok) throw new Error(`Google Drive upload session failed with status ${session.status}.`);
+  const uploadUrl = session.headers.get("location");
+  if (!uploadUrl || new URL(uploadUrl).hostname !== "www.googleapis.com") throw new Error("Google Drive returned an invalid upload session.");
+  return { uploadUrl, contentType:type, folder };
+}
+
 async function uploadWithAccessToken(token, config, model) {
   const name = fileName(model.originalFileName, model.quoteCode);
   const type = contentType(name);
@@ -197,4 +256,16 @@ async function organizeModel(config, model) {
   return organizeWithAccessToken(await accessToken(config), config, model);
 }
 
-module.exports = { configuration, oauthConfiguration, oauthClient, contentType, fileName, quoteFolder, organizeModel, organizeWithAccessToken, uploadModel, uploadWithAccessToken };
+async function listQuoteFiles(config, quoteCode) {
+  return listQuoteFilesWithAccessToken(await accessToken(config), config, quoteCode);
+}
+
+async function startQuoteUpload(config, upload) {
+  return startQuoteUploadWithAccessToken(await accessToken(config), config, upload);
+}
+
+module.exports = {
+  configuration, oauthConfiguration, oauthClient, contentType, fileName, quoteFolder,
+  listQuoteFiles, listQuoteFilesWithAccessToken, organizeModel, organizeWithAccessToken,
+  startQuoteUpload, startQuoteUploadWithAccessToken, uploadModel, uploadWithAccessToken
+};

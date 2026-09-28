@@ -48,3 +48,14 @@ test("admin stylesheet has phone and tablet adaptations", () => {
   assert.match(css, /@media \(max-width: 700px\)/);
   assert.match(css, /@media \(max-width: 520px\)/);
 });
+
+test("Files tab manages Drive quote folders without deletion", () => {
+  const operations = fs.readFileSync(path.join(__dirname, "..", "admin", "operations.js"), "utf8");
+  const server = readApi("admin-estimates.js");
+  for (const phrase of ["One private folder per quote", "Manage files", "Open in Google Drive", "Upload a late customer file", "View", "Download"]) {
+    assert.match(operations, new RegExp(phrase));
+  }
+  for (const action of ["drive_files", "drive_upload_start", "drive_upload_complete"]) assert.match(server, new RegExp(action));
+  assert.doesNotMatch(operations, /delete quote file|delete from drive|remove file/i);
+  assert.match(operations, /25 \* 1024 \* 1024/);
+});

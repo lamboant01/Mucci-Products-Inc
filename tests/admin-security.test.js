@@ -99,6 +99,7 @@ test("the unauthenticated admin page offers Google sign-in without granting dash
   assert.match(correct.body, /noindex,nofollow,noarchive,nosnippet/);
   assert.match(String(correct.headers["Set-Cookie"]), /mucci_admin_login=1; HttpOnly; Secure; SameSite=Lax; Path=\/api\/admin-auth-start/);
   assert.match(String(correct.headers["Content-Security-Policy"]), /form-action 'self' https:\/\/\*\.supabase\.co https:\/\/accounts\.google\.com/);
+  assert.match(String(correct.headers["Content-Security-Policy"]), /connect-src 'self' https:\/\/\*\.supabase\.co https:\/\/www\.googleapis\.com/);
 });
 
 test("OAuth start requires the SameSite login marker even when browser origin headers are unavailable", { concurrency:false }, async (context) => {
