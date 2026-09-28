@@ -6,9 +6,12 @@ const path = require("node:path");
 test("built-in slicer returns time and material for a printable model", { timeout:30000 }, async () => {
   const { createSlicer } = await import("three-slicer");
   const { SLICER_PROFILES } = await import("../estimator/slicer-config.js");
-  assert.deepEqual(Object.keys(SLICER_PROFILES), ["standard", "draft"]);
+  assert.deepEqual(Object.keys(SLICER_PROFILES), ["standard", "draft", "preliminary"]);
   assert.equal(SLICER_PROFILES.standard.layer_height, 0.20);
   assert.equal(SLICER_PROFILES.draft.layer_height, 0.24);
+  assert.equal(SLICER_PROFILES.preliminary.wall_loops, 4);
+  assert.equal(SLICER_PROFILES.preliminary.infill_density, 0.30);
+  assert.equal(SLICER_PROFILES.preliminary.layer_height, 0.20);
   const slicer = await createSlicer();
   try {
     const model = fs.readFileSync(path.join(__dirname, "fixtures", "test-cube.stl"));

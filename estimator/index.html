@@ -46,7 +46,26 @@
             <div class="choice-grid choice-grid-wide">
               <label class="choice"><input required type="radio" name="file_status" value="ready" /><span>Yes, ready to print</span></label>
               <label class="choice"><input type="radio" name="file_status" value="modify" /><span>Yes, but it needs modifications</span></label>
-              <label class="choice"><input type="radio" name="file_status" value="design" /><span>No, I need it designed</span></label>
+              <label class="choice"><input type="radio" name="file_status" value="design" /><span>No, I need a 3D model created</span></label>
+            </div>
+            <div id="service-intent-row" class="conditional-panel hidden">
+              <p class="conditional-question">What do you need? <span>Required</span></p>
+              <div class="choice-grid service-intent-choices">
+                <label class="choice"><input type="radio" name="service_intent" value="DESIGN_ONLY" /><span><b>3D Design Only</b><small>I only need the finished 3D model/file.</small></span></label>
+                <label class="choice"><input type="radio" name="service_intent" value="DESIGN_AND_PRINT" /><span><b>3D Design + 3D Printing</b><small>I need the model designed and a physical part printed.</small></span></label>
+              </div>
+              <p id="service-intent-error" class="field-error" role="alert"></p>
+            </div>
+            <div id="dimensions-row" class="conditional-panel hidden">
+              <p class="conditional-question">Maximum finished dimensions <span>Required</span></p>
+              <p class="help">Enter the approximate maximum overall dimensions of the finished object.</p>
+              <div class="dimension-fields">
+                <label class="field">Length<input type="number" name="dimension_length" min="0.01" step="any" inputmode="decimal" /></label>
+                <label class="field">Width<input type="number" name="dimension_width" min="0.01" step="any" inputmode="decimal" /></label>
+                <label class="field">Height<input type="number" name="dimension_height" min="0.01" step="any" inputmode="decimal" /></label>
+                <label class="field">Unit<select name="dimension_unit"><option value="">Choose unit</option><option value="mm">mm</option><option value="cm">cm</option><option value="inches">inches</option></select></label>
+              </div>
+              <p id="dimensions-error" class="field-error" role="alert"></p>
             </div>
             <label id="file-upload-row" class="field hidden">3D model file
               <input id="model-file" type="file" />
@@ -59,7 +78,7 @@
             </div>
           </fieldset>
 
-          <fieldset>
+          <fieldset id="quantity-section">
             <legend><span>2</span> Quantity</legend>
             <label class="field compact">Number of identical items
               <input required type="number" name="quantity" value="1" min="1" max="999" inputmode="numeric" />
@@ -67,7 +86,7 @@
             <p class="help">Ordering multiple copies of the same part can reduce the average cost per item.</p>
           </fieldset>
 
-          <fieldset>
+          <fieldset id="print-profile-section">
             <legend><span>3</span> Choose a print profile</legend>
             <p class="help emphasis">Choose the finish that best fits your part. Quantity is accounted for automatically.</p>
             <div class="choice-grid profile-choices">
@@ -77,7 +96,7 @@
             <p id="slice-status" class="import-status" role="status"></p>
           </fieldset>
 
-          <fieldset>
+          <fieldset id="colour-section">
             <legend><span>4</span> Number of colours</legend>
             <div class="choice-grid four-up">
               <label class="choice"><input required type="radio" name="colour_count" value="1" /><span>1</span></label>
@@ -88,7 +107,7 @@
             <p class="help">Maximum 4 colours.</p>
           </fieldset>
 
-          <fieldset>
+          <fieldset id="design-section">
             <legend><span>5</span> 3D design</legend>
             <div id="design-options" class="choice-stack"></div>
             <details class="help-details">
@@ -97,7 +116,7 @@
             </details>
           </fieldset>
 
-          <fieldset>
+          <fieldset id="assembly-section">
             <legend><span>6</span> Does this project require significant assembly after printing?</legend>
             <div class="choice-grid">
               <label class="choice"><input required type="radio" name="assembly_required" value="false" /><span>No</span></label>

@@ -25,5 +25,6 @@ const shared = Object.freeze({
 
 export const SLICER_PROFILES = Object.freeze({
   standard: { ...shared, layer_height:0.20, print_speed:50 },
-  draft: { ...shared, layer_height:0.24, print_speed:60 }
+  draft: { ...shared, layer_height:0.24, print_speed:60 },
+  preliminary: { ...shared, wall_loops:4, infill_density:0.30, layer_height:0.20, print_speed:50 }
 });

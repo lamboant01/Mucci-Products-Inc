@@ -14,7 +14,9 @@ const estimate = {
 test("builds an easy-to-read owner estimate email without leaking the private route", () => {
   const built = email.buildEstimateEmail(estimate, "https://mucciproducts.com/");
   assert.match(built.subject, /MP-A42K7/);
-  assert.match(built.text, /Estimated price: \$72\.40 CAD/);
+  assert.match(built.text, /Service selected: 3D Printing/);
+  assert.match(built.text, /Physical print estimate: \$72\.40 CAD/);
+  assert.match(built.text, /Estimated total: \$72\.40 CAD/);
   assert.match(built.text, /Filament: 10\.0 g per item/);
   assert.match(built.text, /Blue & strong/);
   assert.match(built.text, /Print profile: Standard Detail/);
@@ -28,4 +30,29 @@ test("builds an easy-to-read owner estimate email without leaking the private ro
 test("accepts only estimator quote codes", () => {
   assert.equal(email.normalizeQuoteCode("mp-a42k7"), "MP-A42K7");
   assert.equal(email.normalizeQuoteCode("MP-11111"), "");
+});
+
+test("design-only email excludes physical printing details", () => {
+  const rows = email.estimateRows({
+    ...estimate,
+    service_intent:"DESIGN_ONLY",
+    file_status:"design",
+    submitted_length:4,
+    submitted_width:3,
+    submitted_height:2,
+    dimension_unit:"inches",
+    design_estimate_min:120,
+    design_estimate_max:120,
+    print_estimate_min:null,
+    print_estimate_max:null,
+    estimated_total_min:120,
+    estimated_total_max:120
+  });
+  const labels = rows.map(([name]) => name);
+  const values = Object.fromEntries(rows);
+  assert.equal(values["Service selected"], "3D Design Only");
+  assert.equal(values["Physical print estimate"], "Not included");
+  assert.equal(values["Estimated total"], "$120.00 CAD");
+  assert.equal(values["Finished dimensions"], "4 × 3 × 2 inches");
+  assert.doesNotMatch(labels.join(" "), /Print time|Filament|Material total|Colours|Purge allowance/);
 });

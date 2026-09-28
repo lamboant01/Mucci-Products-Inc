@@ -14,7 +14,11 @@ function escapeHtml(value) {
 }
 
 function label(value) {
-  const profile = { standard:"Standard Detail", draft:"Efficient Larger Prints" }[value];
+  const profile = {
+    standard:"Standard Detail", draft:"Efficient Larger Prints",
+    DESIGN_ONLY:"3D Design Only", DESIGN_AND_PRINT:"3D Design + 3D Printing",
+    PRINT_ONLY:"3D Printing", MODIFY_AND_PRINT:"3D Model Modification + 3D Printing"
+  }[value];
   if (profile) return profile;
   return text(value || "Not provided", 160).replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -24,9 +28,14 @@ function money(value) {
 }
 
 function priceRange(estimate) {
-  const minimum = Number(estimate.estimated_price || 0);
-  const maximum = Number(estimate.estimated_price_max ?? minimum);
+  const minimum = Number(estimate.estimated_total_min ?? estimate.estimated_price ?? 0);
+  const maximum = Number(estimate.estimated_total_max ?? estimate.estimated_price_max ?? minimum);
   return minimum === maximum ? money(minimum) : `${money(minimum)}–${money(maximum)}`;
+}
+
+function componentRange(minimum, maximum) {
+  if (minimum == null) return "Not included";
+  return Number(minimum) === Number(maximum) ? money(minimum) : `${money(minimum)}–${money(maximum)}`;
 }
 
 function number(value, digits = 1) {
@@ -34,15 +43,32 @@ function number(value, digits = 1) {
 }
 
 function estimateRows(estimate) {
+  const intent = text(estimate.service_intent || ({ ready:"PRINT_ONLY", modify:"MODIFY_AND_PRINT", design:"DESIGN_AND_PRINT" })[estimate.file_status]);
+  const service = label(intent);
+  const designMinimum = Number(estimate.design_estimate_min ?? 0);
+  const designMaximum = Number(estimate.design_estimate_max ?? designMinimum);
+  const totalMinimum = Number(estimate.estimated_total_min ?? estimate.estimated_price ?? 0);
+  const totalMaximum = Number(estimate.estimated_total_max ?? estimate.estimated_price_max ?? totalMinimum);
+  const printMinimum = estimate.print_estimate_min ?? (intent === "DESIGN_ONLY" ? null : Math.max(0, totalMinimum - designMinimum));
+  const printMaximum = estimate.print_estimate_max ?? (intent === "DESIGN_ONLY" ? null : Math.max(0, totalMaximum - designMaximum));
   const printTime = estimate.size_category
     ? `${label(estimate.size_category)} size review`
     : `${Number(estimate.print_hours_per_item || 0)}h ${Number(estimate.print_minutes_per_item || 0)}m per item`;
-  return [
+  const dimensions = [estimate.submitted_length, estimate.submitted_width, estimate.submitted_height].every((value) => Number(value) > 0)
+    ? `${estimate.submitted_length} × ${estimate.submitted_width} × ${estimate.submitted_height} ${estimate.dimension_unit}` : "Not provided";
+  const rows = [
     ["Quote code", text(estimate.quote_code, 20)],
-    ["Estimated price", `${priceRange(estimate)} CAD`],
+    ["Service selected", service],
+    ["3D design estimate", `${componentRange(designMinimum, designMaximum)} CAD`],
+    [intent === "DESIGN_AND_PRINT" ? "Preliminary print estimate" : "Physical print estimate", printMinimum == null ? "Not included" : `${componentRange(printMinimum, printMaximum)} CAD`],
+    ["Estimated total", `${priceRange(estimate)} CAD`],
     ["Customer name", text(estimate.name, 120) || "Not provided"],
     ["Model file", text(estimate.original_file_name, 255) || (estimate.file_path ? "Uploaded model" : "No model uploaded")],
     ["File status", label(estimate.file_status)],
+    ["Finished dimensions", dimensions],
+    ["Design", label(estimate.design_level)]
+  ];
+  if (intent !== "DESIGN_ONLY") rows.push(
     ["Quantity", String(Number(estimate.quantity || 0))],
     ["Print profile", label(estimate.print_profile)],
     ["Print time", printTime],
@@ -50,10 +76,10 @@ function estimateRows(estimate) {
     ["Material total", estimate.estimated_material_grams == null ? "Not available" : `${number(estimate.estimated_material_grams)} g including purge`],
     ["Colours", text(estimate.colour_count, 4)],
     ["Purge allowance", `${number(estimate.purge_waste_percent || 0)}%`],
-    ["Design", label(estimate.design_level)],
-    ["Assembly", estimate.assembly_required ? "Yes" : "No"],
-    ["Manual review", estimate.requires_manual_review ? "Required" : "Not currently required"]
-  ];
+    ["Assembly", estimate.assembly_required ? "Yes" : "No"]
+  );
+  rows.push(["Manual review", estimate.requires_manual_review ? "Required" : "Not currently required"]);
+  return rows;
 }
 
 function buildEstimateEmail(estimate) {

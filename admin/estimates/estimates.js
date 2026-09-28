@@ -11,7 +11,7 @@
 
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" })[character]);
   const money = (value) => new Intl.NumberFormat("en-CA", { style:"currency", currency:"CAD" }).format(Number(value));
-  const label = (value) => ({ standard:"Standard Detail", draft:"Efficient Larger Prints", pending:"New", reviewed:"Reviewing", etsy_prepared:"Quoted", awaiting_customer:"Awaiting Customer", accepted:"Accepted", in_production:"In Production", declined:"Cancelled", ready:"Ready to Print", modify:"Needs Modifications", design:"Design Required" })[value]
+  const label = (value) => ({ standard:"Standard Detail", draft:"Efficient Larger Prints", pending:"New", reviewed:"Reviewing", etsy_prepared:"Quoted", awaiting_customer:"Awaiting Customer", accepted:"Accepted", in_production:"In Production", declined:"Cancelled", ready:"Ready to Print", modify:"Needs Modifications", design:"Design Required", DESIGN_ONLY:"3D Design Only", DESIGN_AND_PRINT:"3D Design + 3D Printing", PRINT_ONLY:"3D Printing", MODIFY_AND_PRINT:"3D Model Modification + 3D Printing" })[value]
     || String(value || "Not provided").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   const cleanQuote = (value) => String(value || "").trim().toUpperCase();
   const quoteFromUrl = () => cleanQuote(new URLSearchParams(window.location.search).get("quote"));
@@ -148,22 +148,30 @@
   }
 
   function estimateDetailsMarkup(estimate) {
-    const dimensions = [estimate.model_width_mm, estimate.model_depth_mm, estimate.model_height_mm].every((value) => Number(value) > 0)
+    const submittedDimensions = [estimate.submitted_length, estimate.submitted_width, estimate.submitted_height].every((value) => Number(value) > 0)
+      ? `${Number(estimate.submitted_length)} × ${Number(estimate.submitted_width)} × ${Number(estimate.submitted_height)} ${estimate.dimension_unit}` : "";
+    const dimensions = submittedDimensions || ([estimate.model_width_mm, estimate.model_depth_mm, estimate.model_height_mm].every((value) => Number(value) > 0)
       ? `${Number(estimate.model_width_mm).toFixed(1)} × ${Number(estimate.model_depth_mm).toFixed(1)} × ${Number(estimate.model_height_mm).toFixed(1)} mm`
-      : "Not recorded";
+      : "Not recorded");
     const time = Number(estimate.estimated_production_hours) === Number(estimate.estimated_production_hours_max)
       ? `${Number(estimate.estimated_production_hours).toFixed(2)} hours total`
       : `${Number(estimate.estimated_production_hours).toFixed(2)}–${Number(estimate.estimated_production_hours_max).toFixed(2)} hours total`;
     const rows = [
       ["Customer name", estimate.name || "Not provided"], ["Customer email", estimate.email || "Not provided (Etsy contact)"],
-      ["Estimated project price", `${displayPrice(estimate)} CAD`], ["Estimated price per item", `${money(estimate.estimated_price_per_item)} CAD`],
-      ["Quantity", estimate.quantity], ["File status", label(estimate.file_status)], ["Uploaded file", estimate.original_file_name || (estimate.file_path ? "Uploaded model" : "Not provided")],
-      ["Dimensions", dimensions], ["Size category", label(estimate.size_category)], ["Material", estimate.material || "PLA"],
-      ["Colours", estimate.colour_count], ["Design level", label(estimate.design_level)], ["Assembly", estimate.assembly_required ? "Required" : "Not required"],
+      ["Service selected", label(estimate.service_intent)], ["3D design estimate", `${displayPrice({ estimated_price:estimate.design_estimate_min, estimated_price_max:estimate.design_estimate_max })} CAD`],
+      [estimate.service_intent === "DESIGN_AND_PRINT" ? "Preliminary print estimate" : "Physical print estimate", estimate.print_estimate_min == null ? "Not included" : `${displayPrice({ estimated_price:estimate.print_estimate_min, estimated_price_max:estimate.print_estimate_max })} CAD`],
+      ["Estimated project total", `${displayPrice({ estimated_price:estimate.estimated_total_min ?? estimate.estimated_price, estimated_price_max:estimate.estimated_total_max ?? estimate.estimated_price_max })} CAD`],
+      ["File status", label(estimate.file_status)], ["Uploaded file", estimate.original_file_name || (estimate.file_path ? "Uploaded model" : "Not provided")],
+      ["Dimensions", dimensions], ["Design level", label(estimate.design_level)]
+    ];
+    if (estimate.service_intent !== "DESIGN_ONLY") rows.push(
+      ["Quantity", estimate.quantity], ["Size category", label(estimate.size_category)], ["Material", estimate.material || "PLA"],
+      ["Colours", estimate.colour_count], ["Assembly", estimate.assembly_required ? "Required" : "Not required"],
       ["Production time", time], ["Print profile", label(estimate.print_profile)], ["Filament per item", estimate.filament_grams_per_item == null ? "Not available" : `${Number(estimate.filament_grams_per_item).toFixed(1)} g`],
       ["Total material", estimate.estimated_material_grams == null ? "Not available" : `${Number(estimate.estimated_material_grams).toFixed(1)} g including purge`],
-      ["Purge allowance", `${Number(estimate.purge_waste_percent || 0)}%`], ["Manual review", estimate.requires_manual_review ? "Required" : "Not required"], ["Current status", label(estimate.status)]
-    ];
+      ["Purge allowance", `${Number(estimate.purge_waste_percent || 0)}%`]
+    );
+    rows.push(["Manual review", estimate.requires_manual_review ? "Required" : "Not required"], ["Current status", label(estimate.status)]);
     const hasDriveFolder = /^https:\/\/drive\.google\.com\/drive\/folders\//.test(estimate.drive_web_view_link || "");
     return `<dl class="estimate-grid">${rows.map(([term, value]) => `<div><dt>${escapeHtml(term)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl><div class="card-actions"><button class="button button-secondary" type="button" data-copy-value="${escapeHtml(estimate.quote_code)}">Copy Quote Code</button>${estimate.email ? `<button class="button button-secondary" type="button" data-copy-value="${escapeHtml(estimate.email)}">Copy Customer Email</button>` : ""}${estimate.file_path ? '<button class="button button-secondary" id="open-file" type="button">Download Uploaded File</button>' : ""}${estimate.file_path && !hasDriveFolder ? '<button class="button button-secondary" id="organize-drive" type="button">Create Drive Quote Folder</button>' : ""}${hasDriveFolder ? `<a class="button button-secondary" href="${escapeHtml(estimate.drive_web_view_link)}" target="_blank" rel="noopener noreferrer">Open Drive Folder</a>` : ""}</div>`;
   }
@@ -171,7 +179,7 @@
   function checklistMarkup(estimate) {
     const items = [];
     if (estimate.file_path) items.push("File reviewed", "Dimensions confirmed");
-    items.push("Material confirmed", "Colour confirmed", "Quantity confirmed");
+    if (estimate.service_intent !== "DESIGN_ONLY") items.push("Material confirmed", "Colour confirmed", "Quantity confirmed");
     if (estimate.design_level && estimate.design_level !== "none") items.push("Design requirement confirmed");
     items.push("Final price confirmed");
     return items.map((item, index) => `<label><input type="checkbox" name="check_${index}"> ${escapeHtml(item)}</label>`).join("");

@@ -23,6 +23,16 @@ allowance applied to both totals. Design and assembly are separate optional
 charges. The total order is subject to a $40 CAD minimum; that minimum is not
 added on top of the calculated price.
 
+When no model file exists, the customer must choose **3D Design Only** or
+**3D Design + 3D Printing** and provide the maximum finished length, width,
+height, and unit. Design-only estimates contain no manufacturing charge. For
+design-and-print requests, the browser slices a temporary dimension-based box
+at 30% infill, four walls, and 0.20 mm layers to produce a conservative
+preliminary printing estimate. That virtual model is an estimation aid, not a
+claim that the finished object will be a solid block. Design, preliminary
+printing, and combined totals remain separate in the customer result, database,
+owner email, and admin review.
+
 The configured build volume is 250 × 250 × 250 mm. Models exceeding any one
 of those dimensions are rejected before slicing.
 
@@ -33,7 +43,7 @@ on the pinned Three.js and OCCT browser modules. The AGPL Three Slicer engine,
 its licence, and its third-party notices are kept under
 `estimator/vendor/three-slicer/` so the worker does not depend on a remote path.
 
-Run migrations 004 through 015 in order after migrations 001 through 003. All
+Run migrations 004 through 017 in order after migrations 001 through 003. All
 private pricing values and fallback-time assumptions are centralized in
 the single-row `print_estimator_config` table created by that migration. Update
 that row in Supabase to change pricing without editing the public website.
@@ -95,12 +105,17 @@ does not create duplicate customer or order tables: Customers are grouped from
 the contact details already saved with estimates, and Orders / Projects shows
 accepted, in-production, and completed estimate records.
 
+Migration `017_separate_design_and_print_estimates.sql` adds the service intent,
+submitted dimension, and separate design/printing/total price fields. It keeps
+the legacy estimator RPCs available for compatibility while new form
+submissions use the component-based calculation and submission RPCs.
+
 The protected admin area is available at `/admin` after Google sign-in and now
 includes Dashboard, Requests / Estimates, Orders / Projects, Customers,
 Digital Cards, Files, Activity, and Settings & Security. Only sections backed
 by existing Mucci Products data are included. All reads and mutations continue
-through same-origin Vercel functions that re-check the authorized Google UUID
-server-side. Admin pages send `noindex` and `nofollow` directives in both HTML
+through same-origin Vercel functions that re-check the exact verified Google
+email configured as `ADMIN_EMAIL` server-side. Admin pages send `noindex` and `nofollow` directives in both HTML
 and response headers.
 
 The customer-facing listing templates, statuses, default listing quantity, and

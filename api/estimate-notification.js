@@ -10,6 +10,9 @@ const SELECT_COLUMNS = [
   "estimated_price", "estimated_price_max", "estimated_price_per_item",
   "estimated_price_per_item_max", "requires_manual_review", "print_time_source",
   "print_profile", "purge_waste_percent", "filament_grams_per_item",
+  "service_intent", "submitted_length", "submitted_width", "submitted_height", "dimension_unit",
+  "design_estimate_min", "design_estimate_max", "print_estimate_min", "print_estimate_max",
+  "estimated_total_min", "estimated_total_max",
   "email_notification_sent_at", "created_at"
 ].join(",");
 

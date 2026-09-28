@@ -1,4 +1,5 @@
-import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
+import { createVirtualBoundingBoxModel, loadAndPreviewModel, sliceModel } from "./model-slicer.js";
+import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, resolveServiceIntent, serviceLabel, unitMaximum } from "./service-intent.mjs";
 
 (function () {
   "use strict";
@@ -41,6 +42,13 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
       : detail;
   };
   const validationError = (detail) => Object.assign(new Error(detail), { deviceIndependent:true });
+  const serviceIntent = () => resolveServiceIntent(selected("file_status"), selected("service_intent"));
+  const dimensionValues = () => ({
+    length:form.elements.dimension_length.value,
+    width:form.elements.dimension_width.value,
+    height:form.elements.dimension_height.value,
+    unit:form.elements.dimension_unit.value
+  });
 
   function renderDesignOptions() {
     if (!publicOptions) return;
@@ -54,24 +62,76 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
   function updateConditionalFields() {
     const fileStatus = selected("file_status");
     const usesModel = ["ready", "modify"].includes(fileStatus);
+    const needsNoFileDetails = fileStatus === "design";
+    const intent = serviceIntent();
+    const designOnly = intent === SERVICE_INTENTS.DESIGN_ONLY;
+    const designAndPrint = intent === SERVICE_INTENTS.DESIGN_AND_PRINT;
     document.querySelector("#file-upload-row").classList.toggle("hidden", !usesModel);
     document.querySelector("#model-file").required = usesModel;
     document.querySelector("#model-preview").classList.toggle("hidden", !usesModel || !loadedModel);
+    document.querySelector("#service-intent-row").classList.toggle("hidden", !needsNoFileDetails);
+    document.querySelector("#dimensions-row").classList.toggle("hidden", !needsNoFileDetails);
+    form.querySelectorAll('[name="service_intent"]').forEach((input) => { input.required = needsNoFileDetails; input.disabled = !needsNoFileDetails; });
+    ["dimension_length", "dimension_width", "dimension_height", "dimension_unit"].forEach((name) => {
+      form.elements[name].required = needsNoFileDetails;
+      form.elements[name].disabled = !needsNoFileDetails;
+    });
+    document.querySelector("#quantity-section").classList.toggle("hidden", designOnly || (needsNoFileDetails && !designAndPrint));
+    document.querySelector("#print-profile-section").classList.toggle("hidden", needsNoFileDetails);
+    document.querySelector("#colour-section").classList.toggle("hidden", designOnly || (needsNoFileDetails && !designAndPrint));
+    document.querySelector("#assembly-section").classList.toggle("hidden", designOnly || (needsNoFileDetails && !designAndPrint));
+    form.querySelectorAll('[name="print_profile"]').forEach((input) => { input.disabled = needsNoFileDetails; input.required = !needsNoFileDetails; });
+    form.querySelectorAll('[name="colour_count"]').forEach((input) => { input.disabled = designOnly || (needsNoFileDetails && !designAndPrint); input.required = includesPhysicalPrinting(intent) && (!needsNoFileDetails || designAndPrint); });
+    form.querySelectorAll('[name="assembly_required"]').forEach((input) => { input.disabled = designOnly || (needsNoFileDetails && !designAndPrint); input.required = includesPhysicalPrinting(intent) && (!needsNoFileDetails || designAndPrint); });
+    document.querySelector("#service-intent-error").textContent = "";
+    document.querySelector("#dimensions-error").textContent = "";
+    [...form.querySelectorAll("fieldset:not(.hidden)")].forEach((fieldset, index) => {
+      const step = fieldset.querySelector("legend > span");
+      if (step) step.textContent = String(index + 1);
+    });
+  }
+
+  function validateNoFileDetails() {
+    if (selected("file_status") !== "design") return null;
+    if (!serviceIntent()) {
+      document.querySelector("#service-intent-error").textContent = "Choose 3D Design Only or 3D Design + 3D Printing.";
+      throw validationError("Choose what service you need.");
+    }
+    try {
+      const dimensions = dimensionsToMm(dimensionValues(), maxModelDimensionMm);
+      document.querySelector("#dimensions-error").textContent = "";
+      return dimensions;
+    } catch (error) {
+      document.querySelector("#dimensions-error").textContent = error.message;
+      throw validationError(error.message);
+    }
+  }
+
+  function updateDimensionLimits() {
+    const unit = form.elements.dimension_unit.value;
+    const maximum = unitMaximum(unit, maxModelDimensionMm);
+    ["dimension_length", "dimension_width", "dimension_height"].forEach((name) => { form.elements[name].max = String(maximum); });
   }
 
   function payloadFromForm() {
     const values = Object.fromEntries(new FormData(form));
-    const usesSlicer = ["ready", "modify"].includes(values.file_status) && slicedPrintTime;
+    const intent = resolveServiceIntent(values.file_status, values.service_intent);
+    const physicalPrinting = includesPhysicalPrinting(intent);
+    const usesSlicer = physicalPrinting && slicedPrintTime;
+    const dimensions = values.file_status === "design" ? dimensionsToMm({ length:values.dimension_length, width:values.dimension_width, height:values.dimension_height, unit:values.dimension_unit }, maxModelDimensionMm) : null;
     return {
       p_file_status: values.file_status,
-      p_quantity: Number(values.quantity),
+      p_service_intent: intent,
+      p_quantity: intent === SERVICE_INTENTS.DESIGN_ONLY ? 1 : Number(values.quantity),
       p_print_hours_per_item: usesSlicer ? slicedPrintTime.hours : null,
       p_print_minutes_per_item: usesSlicer ? slicedPrintTime.minutes : null,
       p_filament_grams_per_item: usesSlicer ? slicedPrintTime.grams : null,
-      p_size_category: usesSlicer ? null : "not_sure",
-      p_colour_count: values.colour_count,
+      p_colour_count: physicalPrinting ? values.colour_count : "1",
       p_design_level: values.design_level,
-      p_assembly_required: values.assembly_required === "true"
+      p_assembly_required: physicalPrinting && values.assembly_required === "true",
+      p_model_length_mm: dimensions?.x || loadedModel?.dimensions?.x || null,
+      p_model_width_mm: dimensions?.y || loadedModel?.dimensions?.y || null,
+      p_model_height_mm: dimensions?.z || loadedModel?.dimensions?.z || null
     };
   }
 
@@ -119,11 +179,13 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
   async function calculate(event) {
     event.preventDefault();
     message.textContent = "";
-    if (!form.reportValidity()) return;
     try {
+      const noFileDimensions = validateNoFileDetails();
+      if (!form.reportValidity()) return;
       const button = form.querySelector('button[type="submit"]');
       button.disabled = true;
       const fileStatus = selected("file_status");
+      const intent = serviceIntent();
       const printProfile = selected("print_profile");
       if (["ready", "modify"].includes(fileStatus)) {
         validateFile();
@@ -136,12 +198,19 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
         if (!estimatedSeconds) throw new Error("The slicer generated G-code but did not return a usable print-time estimate.");
         slicedPrintTime = { ...gcodeTime.toHoursMinutes(estimatedSeconds), grams:sliced.filamentGrams };
         document.querySelector("#slice-status").textContent = "";
+      } else if (intent === SERVICE_INTENTS.DESIGN_AND_PRINT) {
+        button.textContent = "Preparing preliminary print estimate…";
+        const virtualModel = createVirtualBoundingBoxModel(noFileDimensions);
+        const sliced = await sliceModel(virtualModel, "preliminary", slicingProgress);
+        if (!sliced.seconds) throw new Error("The preliminary print estimate could not be prepared from these dimensions.");
+        slicedPrintTime = { ...gcodeTime.toHoursMinutes(sliced.seconds), grams:sliced.filamentGrams };
+        document.querySelector("#slice-status").textContent = "";
       } else {
         slicedPrintTime = null;
       }
       const payload = payloadFromForm();
       button.textContent = "Calculating price…";
-      const { data, error } = await client.rpc("calculate_print_estimate", payload);
+      const { data, error } = await client.rpc("calculate_service_estimate", payload);
       if (error) throw validationError(error.message || "The pricing service could not calculate this estimate.");
       calculatedPayload = payload;
       calculatedResult = Array.isArray(data) ? data[0] : data;
@@ -159,8 +228,16 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
   }
 
   function renderEstimate(estimate) {
+    const intent = calculatedPayload.p_service_intent;
+    const printingLabel = intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? "Preliminary 3D Print Estimate" : "Physical 3D Printing";
+    const designValue = range(estimate.design_estimate_min, estimate.design_estimate_max);
+    const printValue = estimate.print_estimate_min == null ? "Not included" : `${range(estimate.print_estimate_min, estimate.print_estimate_max)} CAD`;
+    const totalValue = range(estimate.estimated_total_min, estimate.estimated_total_max);
+    const preliminaryNote = intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? '<p class="notice">This is a preliminary printing estimate based on the dimensions provided. Final printing cost may change once the finished 3D model is available. The overall dimensions are used as a conservative planning boundary; this does not assume the finished object is a solid block.</p>' : "";
+    const designOnlyNote = intent === SERVICE_INTENTS.DESIGN_ONLY ? '<p class="notice">This estimate covers creation of the 3D model only. Physical printing is not included.</p>' : "";
+    const quantityMeta = intent === SERVICE_INTENTS.DESIGN_ONLY ? "" : `<span><strong>Quantity:</strong> ${escapeHtml(calculatedPayload.p_quantity)}</span>`;
     result.classList.remove("hidden");
-    result.innerHTML = `<p class="eyebrow">Your estimate is ready</p><h2>Estimated Project Price</h2><p class="price">${range(estimate.estimated_price_min, estimate.estimated_price_max)} CAD</p><div class="result-meta"><span><strong>Quantity:</strong> ${escapeHtml(calculatedPayload.p_quantity)}</span><span><strong>Approximate price per item:</strong> ${range(estimate.price_per_item_min, estimate.price_per_item_max)} CAD</span></div>${estimate.requires_manual_review ? '<p class="notice"><strong>File review required.</strong> This project needs manual confirmation before final pricing.</p>' : ""}<p>Estimate only. Final pricing is confirmed after your project and files are reviewed.</p><p>Submitting an estimate does not create an order or charge you. If you contacted us through Etsy, your final order and payment will be completed through Etsy.</p><div class="result-actions"><button id="submit-estimate" class="primary-button" type="button">SUBMIT ESTIMATE</button></div><p id="submit-message" role="alert"></p>`;
+    result.innerHTML = `<p class="eyebrow">Your estimate is ready</p><h2>Estimate breakdown</h2><dl class="quote-breakdown"><div><dt>Service</dt><dd>${escapeHtml(serviceLabel(intent))}</dd></div>${intent === SERVICE_INTENTS.PRINT_ONLY ? "" : `<div><dt>3D Design Estimate</dt><dd>${designValue} CAD</dd></div>`}<div><dt>${printingLabel}</dt><dd>${printValue}</dd></div><div class="quote-total"><dt>Estimated ${intent === SERVICE_INTENTS.DESIGN_ONLY ? "Design" : "Project"} Total</dt><dd>${totalValue} CAD</dd></div></dl>${designOnlyNote}${preliminaryNote}<div class="result-meta">${quantityMeta}${estimate.print_price_per_item_min == null ? "" : `<span><strong>Approximate printing price per item:</strong> ${range(estimate.print_price_per_item_min, estimate.print_price_per_item_max)} CAD</span>`}</div>${estimate.requires_manual_review ? '<p class="notice"><strong>Review required.</strong> This project needs manual confirmation before final pricing.</p>' : ""}<p>Estimate only. Final pricing is confirmed after your project and files are reviewed.</p><p>Submitting an estimate does not create an order or charge you. If you contacted us through Etsy, your final order and payment will be completed through Etsy.</p><div class="result-actions"><button id="submit-estimate" class="primary-button" type="button">SUBMIT ESTIMATE</button></div><p id="submit-message" role="alert"></p>`;
     document.querySelector("#submit-estimate").addEventListener("click", submitEstimate);
     result.scrollIntoView({ behavior:"smooth", block:"start" });
   }
@@ -175,7 +252,8 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
       const currentPayload = payloadFromForm();
       if (JSON.stringify(currentPayload) !== JSON.stringify(calculatedPayload)) throw new Error("Your project details changed. Please recalculate before submitting.");
       const values = Object.fromEntries(new FormData(form));
-      const usedSlicer = calculatedPayload.p_size_category === null;
+      const intent = calculatedPayload.p_service_intent;
+      const physicalPrinting = includesPhysicalPrinting(intent);
       const selectedFile = validateFile();
       let filePath = null;
       if (selectedFile) {
@@ -183,15 +261,16 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
         const { error: uploadError } = await client.storage.from("print-estimate-files").upload(filePath, selectedFile.file, { upsert:false, contentType:selectedFile.file.type || "application/octet-stream" });
         if (uploadError) throw new Error(`The file could not be uploaded: ${uploadError.message}`);
       }
-      const { data, error } = await client.rpc("submit_print_estimate", {
+      const { data, error } = await client.rpc("submit_service_estimate", {
         ...calculatedPayload,
         p_name: values.name.trim() || null, p_file_path: filePath,
         p_original_file_name: selectedFile?.file.name || null,
-        p_model_width_mm: loadedModel?.dimensions?.x || null,
-        p_model_depth_mm: loadedModel?.dimensions?.y || null,
-        p_model_height_mm: loadedModel?.dimensions?.z || null,
-        p_print_time_source: usedSlicer ? "slicer" : "unknown",
-        p_print_profile: usedSlicer ? values.print_profile : null,
+        p_submitted_length: values.file_status === "design" ? Number(values.dimension_length) : null,
+        p_submitted_width: values.file_status === "design" ? Number(values.dimension_width) : null,
+        p_submitted_height: values.file_status === "design" ? Number(values.dimension_height) : null,
+        p_dimension_unit: values.file_status === "design" ? values.dimension_unit : null,
+        p_print_time_source: intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? "virtual_bounding_box" : physicalPrinting ? "slicer" : "unknown",
+        p_print_profile: intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? "standard" : physicalPrinting ? values.print_profile : null,
         p_notes: values.notes.trim() || null
       });
       if (error) throw error;
@@ -214,10 +293,12 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
 
   function renderSuccess(submission) {
     const quoteCode = submission.quote_code;
+    const intent = calculatedPayload.p_service_intent;
     const etsyMessage = `Hi! I completed the Mucci Products 3D Printing Estimator.\n\nMy quote code is ${quoteCode}.\n\nPlease review my project and send me the final Etsy listing when ready.`;
     form.remove();
     result.classList.remove("hidden");
-    result.innerHTML = `<p class="eyebrow">Estimate Submitted</p><h2>Estimated Price</h2><p class="price">${range(submission.estimated_price_min, submission.estimated_price_max)} CAD</p><p>Your Quote Code:</p><div class="quote-code">${escapeHtml(quoteCode)}</div><p class="etsy-instruction">Send this code to Mucci Products on Etsy.</p><div class="result-actions"><button class="secondary-button" type="button" data-copy-code>COPY CODE</button><button class="secondary-button" type="button" data-copy-message>COPY ETSY MESSAGE</button><a class="primary-button" href="${escapeHtml(config.etsyUrl || "#")}" target="_blank" rel="noreferrer">OPEN ETSY</a></div><p class="notice">This is an estimate only. Final pricing will be confirmed after Mucci Products reviews your project.</p><p id="copy-status" role="status"></p>`;
+    const printing = submission.print_estimate_min == null ? "Not included" : `${range(submission.print_estimate_min, submission.print_estimate_max)} CAD`;
+    result.innerHTML = `<p class="eyebrow">Estimate Submitted</p><h2>Saved estimate breakdown</h2><dl class="quote-breakdown"><div><dt>Service</dt><dd>${escapeHtml(serviceLabel(intent))}</dd></div>${intent === SERVICE_INTENTS.PRINT_ONLY ? "" : `<div><dt>3D Design</dt><dd>${range(submission.design_estimate_min, submission.design_estimate_max)} CAD</dd></div>`}<div><dt>${intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? "Preliminary Printing" : "Physical Printing"}</dt><dd>${printing}</dd></div><div class="quote-total"><dt>Estimated Total</dt><dd>${range(submission.estimated_total_min, submission.estimated_total_max)} CAD</dd></div></dl><p>Your Quote Code:</p><div class="quote-code">${escapeHtml(quoteCode)}</div><p class="etsy-instruction">Send this code to Mucci Products on Etsy.</p><div class="result-actions"><button class="secondary-button" type="button" data-copy-code>COPY CODE</button><button class="secondary-button" type="button" data-copy-message>COPY ETSY MESSAGE</button><a class="primary-button" href="${escapeHtml(config.etsyUrl || "#")}" target="_blank" rel="noreferrer">OPEN ETSY</a></div><p class="notice">This is an estimate only. Final pricing will be confirmed after Mucci Products reviews your project.</p><p id="copy-status" role="status"></p>`;
     const copy = async (text, confirmation) => { await navigator.clipboard.writeText(text); document.querySelector("#copy-status").textContent = confirmation; };
     document.querySelector("[data-copy-code]").addEventListener("click", () => copy(quoteCode, "Quote code copied."));
     document.querySelector("[data-copy-message]").addEventListener("click", () => copy(etsyMessage, "Etsy message copied."));
@@ -226,8 +307,17 @@ import { loadAndPreviewModel, sliceModel } from "./model-slicer.js";
 
   form.addEventListener("change", (event) => {
     if (event.target.name === "file_status") renderDesignOptions();
-    if (event.target.name === "file_status") updateConditionalFields();
+    if (["file_status", "service_intent"].includes(event.target.name)) updateConditionalFields();
+    if (event.target.name === "dimension_unit") updateDimensionLimits();
     if (calculatedPayload) { calculatedPayload = null; calculatedResult = null; result.classList.add("hidden"); result.innerHTML = ""; }
+  });
+  form.addEventListener("invalid", (event) => {
+    if (event.target.name === "service_intent") document.querySelector("#service-intent-error").textContent = "Choose 3D Design Only or 3D Design + 3D Printing.";
+    if (["dimension_length", "dimension_width", "dimension_height", "dimension_unit"].includes(event.target.name)) document.querySelector("#dimensions-error").textContent = "Complete the length, width, height, and unit with values greater than zero.";
+  }, true);
+  form.addEventListener("input", (event) => {
+    if (event.target.name === "service_intent") document.querySelector("#service-intent-error").textContent = "";
+    if (["dimension_length", "dimension_width", "dimension_height", "dimension_unit"].includes(event.target.name)) document.querySelector("#dimensions-error").textContent = "";
   });
   document.querySelector("#model-file").addEventListener("change", handleModelFile);
   form.addEventListener("submit", calculate);

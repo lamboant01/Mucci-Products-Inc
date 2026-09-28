@@ -126,6 +126,15 @@ export async function loadAndPreviewModel(file, container) {
   return { binaryStl, dimensions:{ x:dimensions.x, y:dimensions.y, z:dimensions.z } };
 }
 
+export function createVirtualBoundingBoxModel(dimensions) {
+  const { x, y, z } = dimensions || {};
+  if (![x, y, z].every((value) => Number.isFinite(value) && value > 0)) throw new Error("Enter valid finished dimensions before estimating printing.");
+  const group = new THREE.Group();
+  group.add(new THREE.Mesh(new THREE.BoxGeometry(x, y, z), meshMaterial()));
+  normalizeGroup(group);
+  return { binaryStl:toBinaryStl(group), dimensions:{ x, y, z } };
+}
+
 export async function sliceModel(model, profileName, onProgress) {
   const process = SLICER_PROFILES[profileName];
   if (!process) throw new Error("Choose a valid print profile.");
