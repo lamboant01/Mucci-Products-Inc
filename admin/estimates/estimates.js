@@ -168,7 +168,8 @@
     ];
     if (estimate.service_intent !== "DESIGN_ONLY") rows.push(
       ["Quantity", estimate.quantity], ["Size category", label(estimate.size_category)], ["Material", estimate.material || "PLA"],
-      ["Colours", estimate.colour_count], ["Assembly", estimate.assembly_required ? "Required" : "Not required"],
+      ["Colours", estimate.colour_count], ["Wanted colours", estimate.desired_colours || "Not provided"],
+      ["Assembly", estimate.assembly_required ? "Required" : "Not required"],
       ["Production time", time], ["Print profile", label(estimate.print_profile)], ["Filament per item", estimate.filament_grams_per_item == null ? "Not available" : `${Number(estimate.filament_grams_per_item).toFixed(1)} g`],
       ["Total material", estimate.estimated_material_grams == null ? "Not available" : `${Number(estimate.estimated_material_grams).toFixed(1)} g including purge`],
       ["Purge allowance", `${Number(estimate.purge_waste_percent || 0)}%`]

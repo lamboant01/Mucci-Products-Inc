@@ -31,7 +31,9 @@ at 30% infill, four walls, and 0.20 mm layers to produce a conservative
 preliminary printing estimate. That virtual model is an estimation aid, not a
 claim that the finished object will be a solid block. Design, preliminary
 printing, and combined totals remain separate in the customer result, database,
-owner email, and admin review.
+owner email, and admin review. Printing requests also require the customer's
+wanted colour names or shades, with a clear notice that the closest filament
+match depends on current market availability.
 
 The printer build volume remains 250 × 250 × 250 mm. Finished dimensions up to
 1000 mm per axis are accepted for no-file design requests. If any finished

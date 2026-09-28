@@ -26,6 +26,8 @@ alter table public.print_estimates add column if not exists dimension_unit text
 alter table public.print_estimates add column if not exists split_and_assembly_accepted boolean not null default false;
 alter table public.print_estimates add column if not exists estimated_section_count integer not null default 1
   check (estimated_section_count between 1 and 64);
+alter table public.print_estimates add column if not exists desired_colours text
+  check (desired_colours is null or char_length(desired_colours) between 1 and 200);
 
 alter table public.print_estimates add column if not exists design_estimate_min numeric(12,2) not null default 0
   check (design_estimate_min >= 0);
@@ -199,7 +201,7 @@ grant execute on function public.calculate_service_estimate(
 create or replace function public.submit_service_estimate(
   p_file_path text, p_original_file_name text, p_file_status text, p_service_intent text,
   p_quantity integer, p_print_hours_per_item integer, p_print_minutes_per_item integer,
-  p_filament_grams_per_item numeric, p_colour_count text, p_design_level text,
+  p_filament_grams_per_item numeric, p_colour_count text, p_desired_colours text, p_design_level text,
   p_assembly_required boolean, p_split_and_assembly_accepted boolean,
   p_estimated_section_count integer, p_print_time_source text, p_print_profile text,
   p_name text, p_notes text, p_model_length_mm numeric, p_model_width_mm numeric,
@@ -225,6 +227,8 @@ declare
 begin
   if clean_name is not null and char_length(clean_name) > 120 then raise exception 'Name is too long'; end if;
   if p_notes is not null and char_length(p_notes) > 3000 then raise exception 'Notes are too long'; end if;
+  if p_service_intent <> 'DESIGN_ONLY' and (nullif(trim(p_desired_colours),'') is null or char_length(trim(p_desired_colours)) > 200) then raise exception 'Enter the wanted colours using 200 characters or fewer'; end if;
+  if p_service_intent = 'DESIGN_ONLY' and nullif(trim(p_desired_colours),'') is not null then raise exception 'Design-only estimates cannot include printing colours'; end if;
   if p_estimated_section_count is null or p_estimated_section_count < 1 or p_estimated_section_count > 64 then raise exception 'Invalid printable section count'; end if;
   if p_file_path is not null and p_file_path !~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\.(stl|3mf|obj|step|stp)$' then raise exception 'Invalid uploaded file path'; end if;
   if clean_file_name is not null and (p_file_path is null or char_length(clean_file_name) > 255 or clean_file_name ~ '[[:cntrl:]]') then raise exception 'Invalid model filename'; end if;
@@ -270,7 +274,7 @@ begin
       insert into public.print_estimates (
         quote_code,name,email,file_path,original_file_name,file_status,service_intent,
         quantity,print_hours_per_item,print_minutes_per_item,filament_grams_per_item,
-        size_category,colour_count,design_level,assembly_required,notes,
+        size_category,colour_count,desired_colours,design_level,assembly_required,notes,
         estimated_production_hours,estimated_production_hours_max,estimated_material_grams,
         estimated_price,estimated_price_max,estimated_price_per_item,estimated_price_per_item_max,
         requires_manual_review,print_time_source,print_profile,purge_waste_percent,
@@ -282,7 +286,7 @@ begin
       ) values (
         generated_code,clean_name,null,p_file_path,clean_file_name,p_file_status,p_service_intent,
         p_quantity,p_print_hours_per_item,p_print_minutes_per_item,p_filament_grams_per_item,
-        null,p_colour_count,p_design_level,p_assembly_required,nullif(trim(p_notes),''),
+        null,p_colour_count,nullif(trim(p_desired_colours),''),p_design_level,p_assembly_required,nullif(trim(p_notes),''),
         calc.estimated_production_hours_min,calc.estimated_production_hours_max,
         calc.estimated_material_grams,calc.estimated_total_min,calc.estimated_total_max,
         round(calc.estimated_total_min / p_quantity,2),round(calc.estimated_total_max / p_quantity,2),
@@ -313,10 +317,10 @@ end;
 $$;
 
 revoke all on function public.submit_service_estimate(
-  text,text,text,text,integer,integer,integer,numeric,text,text,boolean,boolean,integer,text,text,text,text,
+  text,text,text,text,integer,integer,integer,numeric,text,text,text,boolean,boolean,integer,text,text,text,text,
   numeric,numeric,numeric,numeric,numeric,numeric,text
 ) from public;
 grant execute on function public.submit_service_estimate(
-  text,text,text,text,integer,integer,integer,numeric,text,text,boolean,boolean,integer,text,text,text,text,
+  text,text,text,text,integer,integer,integer,numeric,text,text,text,boolean,boolean,integer,text,text,text,text,
   numeric,numeric,numeric,numeric,numeric,numeric,text
 ) to anon, authenticated;

@@ -76,6 +76,7 @@ function estimateRows(estimate) {
     ["Filament", estimate.filament_grams_per_item == null ? "Not available" : `${number(estimate.filament_grams_per_item)} g per item`],
     ["Material total", estimate.estimated_material_grams == null ? "Not available" : `${number(estimate.estimated_material_grams)} g including purge`],
     ["Colours", text(estimate.colour_count, 4)],
+    ["Wanted colours", text(estimate.desired_colours, 200) || "Not provided"],
     ["Purge allowance", `${number(estimate.purge_waste_percent || 0)}%`],
     ["Assembly", estimate.assembly_required ? "Yes" : "No"]
   );

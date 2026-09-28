@@ -31,7 +31,8 @@ test("quote form presents required service and dimensions without changing exist
     "Yes, ready to print", "Yes, but it needs modifications", "No, I need a 3D model created",
     "What do you need?", "3D Design Only", "3D Design + 3D Printing",
     "Maximum finished dimensions", "Length", "Width", "Height", "Choose unit",
-    "I approve splitting and assembly"
+    "I approve splitting and assembly", "Wanted colours",
+    "closest available filament match based on current market availability"
   ]) assert.match(html, new RegExp(phrase.replace(/[+]/g, "\\+")));
   assert.match(html, /name="service_intent" value="DESIGN_ONLY"/);
   assert.match(html, /name="service_intent" value="DESIGN_AND_PRINT"/);
@@ -45,6 +46,8 @@ test("customer estimator separates design, preliminary printing, and total prici
   assert.match(source, /sliceModel\(virtualModel, "preliminary"/);
   assert.match(source, /splitDimensionsForPrint/);
   assert.match(source, /p_split_and_assembly_accepted/);
+  assert.match(source, /desired_colours\.required = includesPhysicalPrinting/);
+  assert.match(source, /p_desired_colours/);
   assert.match(source, /\["ready", "modify"\]\.includes\(fileStatus\)/);
   assert.match(source, /sliceModel\(loadedModel, printProfile/);
   assert.match(source, /Physical 3D Printing/);
@@ -56,13 +59,14 @@ test("customer estimator separates design, preliminary printing, and total prici
 test("database migration stores separate service pricing and preserves quantity behavior", () => {
   const sql = read("supabase", "migrations", "017_separate_design_and_print_estimates.sql");
   for (const value of ["DESIGN_ONLY", "DESIGN_AND_PRINT", "PRINT_ONLY", "MODIFY_AND_PRINT"]) assert.match(sql, new RegExp(value));
-  for (const column of ["submitted_length", "submitted_width", "submitted_height", "dimension_unit", "split_and_assembly_accepted", "estimated_section_count", "design_estimate_min", "print_estimate_min", "estimated_total_min"]) assert.match(sql, new RegExp(column));
+  for (const column of ["submitted_length", "submitted_width", "submitted_height", "dimension_unit", "split_and_assembly_accepted", "estimated_section_count", "desired_colours", "design_estimate_min", "print_estimate_min", "estimated_total_min"]) assert.match(sql, new RegExp(column));
   assert.match(sql, /design_price \+ coalesce\(print_estimate_min, 0\)/i);
   assert.doesNotMatch(sql, /design_price\s*\*\s*p_quantity/i);
   assert.match(sql, /p_quantity <> 1[\s\S]*Design-only estimates cannot include physical printing/i);
   assert.match(sql, /compute_print_estimate\([\s\S]*'ready',p_quantity[\s\S]*'none'/i);
   assert.match(sql, /virtual_bounding_box/);
   assert.match(sql, /greatest\(p_model_length_mm,p_model_width_mm,p_model_height_mm\) > 250[\s\S]*p_split_and_assembly_accepted/i);
+  assert.match(sql, /Enter the wanted colours using 200 characters or fewer/);
 });
 
 test("email and admin review show separated estimate components", () => {
@@ -72,5 +76,6 @@ test("email and admin review show separated estimate components", () => {
     assert.match(source, /Service selected/);
     assert.match(source, /design estimate/i);
     assert.match(source, /Preliminary print estimate/i);
+    assert.match(source, /Wanted colours/i);
   }
 });

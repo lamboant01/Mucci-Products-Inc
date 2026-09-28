@@ -35,7 +35,7 @@ test("sends one protected estimate summary to the owner", { concurrency:false },
       quote_code:"MP-A42K7", name:"Anthony", original_file_name:"bracket.stl",
       file_path:"model/path.stl", file_status:"ready", quantity:1,
       print_hours_per_item:1, print_minutes_per_item:5, size_category:null,
-      colour_count:"2", design_level:"none", assembly_required:false, notes:"Blue",
+      colour_count:"2", desired_colours:"Navy blue", design_level:"none", assembly_required:false, notes:"Blue",
       estimated_material_grams:11, estimated_price:15.2, estimated_price_max:15.2,
       requires_manual_review:false, print_profile:"standard", purge_waste_percent:10,
       filament_grams_per_item:10, email_notification_sent_at:null
@@ -59,6 +59,7 @@ test("sends one protected estimate summary to the owner", { concurrency:false },
   assert.deepEqual(payload.to, ["order@mucciproducts.com"]);
   assert.doesNotMatch(payload.text, /admin\/estimates|card-dashboard|https?:\/\//i);
   assert.match(payload.text, /bracket\.stl/);
+  assert.match(payload.text, /Wanted colours: Navy blue/);
   assert.equal(payload.attachments, undefined);
   assert.equal(emailCall.init.headers["Idempotency-Key"], "estimate-submitted/MP-A42K7");
 });

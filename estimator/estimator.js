@@ -86,6 +86,8 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
     document.querySelector("#assembly-section").classList.toggle("hidden", designOnly || (needsNoFileDetails && !designAndPrint));
     form.querySelectorAll('[name="print_profile"]').forEach((input) => { input.disabled = needsNoFileDetails; input.required = !needsNoFileDetails; });
     form.querySelectorAll('[name="colour_count"]').forEach((input) => { input.disabled = designOnly || (needsNoFileDetails && !designAndPrint); input.required = includesPhysicalPrinting(intent) && (!needsNoFileDetails || designAndPrint); });
+    form.elements.desired_colours.disabled = designOnly || (needsNoFileDetails && !designAndPrint) || !includesPhysicalPrinting(intent);
+    form.elements.desired_colours.required = includesPhysicalPrinting(intent) && (!needsNoFileDetails || designAndPrint);
     form.querySelectorAll('[name="assembly_required"]').forEach((input) => { input.disabled = designOnly || (needsNoFileDetails && !designAndPrint); input.required = includesPhysicalPrinting(intent) && (!needsNoFileDetails || designAndPrint); });
     document.querySelector("#service-intent-error").textContent = "";
     document.querySelector("#dimensions-error").textContent = "";
@@ -301,6 +303,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
         p_submitted_height: values.file_status === "design" ? Number(values.dimension_height) : null,
         p_dimension_unit: values.file_status === "design" ? values.dimension_unit : null,
         p_estimated_section_count: calculatedPayload.p_split_and_assembly_accepted ? splitDimensionsForPrint(submittedDimensions, maxPrintableSectionDimensionMm).sectionCount : 1,
+        p_desired_colours: physicalPrinting ? values.desired_colours.trim() : null,
         p_print_time_source: intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? "virtual_bounding_box" : physicalPrinting ? "slicer" : "unknown",
         p_print_profile: intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? "standard" : physicalPrinting ? values.print_profile : null,
         p_notes: values.notes.trim() || null
