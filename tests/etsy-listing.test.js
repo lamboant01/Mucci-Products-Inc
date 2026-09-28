@@ -24,7 +24,8 @@ test("builds a concise customer-safe Etsy package", () => {
     listingQuantity:1
   });
 
-  assert.equal(prepared.title, "Custom 3D Printing Order — MP-A42K7");
+  assert.equal(prepared.title, "Custom 3D Printing Order - MP-A42K7");
+  assert.doesNotMatch(prepared.title, /[^A-Za-z0-9 /.,()\-"%:&]/);
   assert.equal(prepared.price, "$115.00 CAD");
   assert.equal(prepared.listingQuantity, 1);
   assert.equal(prepared.physicalQuantity, 5);
@@ -35,6 +36,13 @@ test("builds a concise customer-safe Etsy package", () => {
   assert.doesNotMatch(prepared.description, /customer@example\.com|Never expose|123e4567|hourly|per[- ]gram/i);
   assert.match(prepared.summary, /Listing Quantity:\n1/);
   assert.match(prepared.summary, /Physical Quantity:\n5/);
+});
+
+test("generated listing titles use only Etsy-accepted punctuation", () => {
+  assert.equal(
+    listing.buildTitle({ ...estimate, file_status:"design", design_level:"simple" }),
+    "Custom 3D Design & Print - MP-A42K7"
+  );
 });
 
 test("uses central conservative processing rules and manual fallback", () => {

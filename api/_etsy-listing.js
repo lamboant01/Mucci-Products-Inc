@@ -25,7 +25,7 @@ function suggestProcessing(estimate) {
 
 function buildTitle(estimate) {
   const prefix = estimate.file_status === "ready" && estimate.design_level === "none" ? "Custom 3D Printing Order" : "Custom 3D Design & Print";
-  return `${prefix} — ${estimate.quote_code}`;
+  return `${prefix} - ${estimate.quote_code}`;
 }
 
 function buildDescription(estimate, finalPrice, physicalQuantity) {
