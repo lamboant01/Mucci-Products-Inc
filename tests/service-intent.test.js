@@ -16,7 +16,13 @@ test("no-file services require an explicit design intent and convert dimensions"
   assert.deepEqual(module.dimensionsToMm({ length:2, width:3, height:4, unit:"cm" }), { x:20, y:30, z:40 });
   assert.deepEqual(module.dimensionsToMm({ length:1, width:2, height:3, unit:"inches" }), { x:25.4, y:50.8, z:76.19999999999999 });
   assert.throws(() => module.dimensionsToMm({ length:0, width:2, height:3, unit:"mm" }), /greater than zero/);
-  assert.throws(() => module.dimensionsToMm({ length:251, width:2, height:3, unit:"mm" }), /250 mm or less/);
+  const oversized = module.dimensionsToMm({ length:17, width:14, height:3, unit:"inches" });
+  assert.equal(module.requiresPrintSplitting(oversized), true);
+  const splitPlan = module.splitDimensionsForPrint(oversized);
+  assert.equal(splitPlan.sectionCount, 4);
+  assert.ok(Object.values(splitPlan.sectionDimensions).every((value) => value <= 250));
+  assert.equal(module.unitMaximum("inches"), 39.37);
+  assert.throws(() => module.dimensionsToMm({ length:1001, width:2, height:3, unit:"mm" }), /1000 mm or less/);
 });
 
 test("quote form presents required service and dimensions without changing existing file choices", () => {
@@ -24,7 +30,8 @@ test("quote form presents required service and dimensions without changing exist
   for (const phrase of [
     "Yes, ready to print", "Yes, but it needs modifications", "No, I need a 3D model created",
     "What do you need?", "3D Design Only", "3D Design + 3D Printing",
-    "Maximum finished dimensions", "Length", "Width", "Height", "Choose unit"
+    "Maximum finished dimensions", "Length", "Width", "Height", "Choose unit",
+    "I approve splitting and assembly"
   ]) assert.match(html, new RegExp(phrase.replace(/[+]/g, "\\+")));
   assert.match(html, /name="service_intent" value="DESIGN_ONLY"/);
   assert.match(html, /name="service_intent" value="DESIGN_AND_PRINT"/);
@@ -36,6 +43,8 @@ test("customer estimator separates design, preliminary printing, and total prici
   assert.match(source, /submit_service_estimate/);
   assert.match(source, /createVirtualBoundingBoxModel/);
   assert.match(source, /sliceModel\(virtualModel, "preliminary"/);
+  assert.match(source, /splitDimensionsForPrint/);
+  assert.match(source, /p_split_and_assembly_accepted/);
   assert.match(source, /\["ready", "modify"\]\.includes\(fileStatus\)/);
   assert.match(source, /sliceModel\(loadedModel, printProfile/);
   assert.match(source, /Physical 3D Printing/);
@@ -47,12 +56,13 @@ test("customer estimator separates design, preliminary printing, and total prici
 test("database migration stores separate service pricing and preserves quantity behavior", () => {
   const sql = read("supabase", "migrations", "017_separate_design_and_print_estimates.sql");
   for (const value of ["DESIGN_ONLY", "DESIGN_AND_PRINT", "PRINT_ONLY", "MODIFY_AND_PRINT"]) assert.match(sql, new RegExp(value));
-  for (const column of ["submitted_length", "submitted_width", "submitted_height", "dimension_unit", "design_estimate_min", "print_estimate_min", "estimated_total_min"]) assert.match(sql, new RegExp(column));
+  for (const column of ["submitted_length", "submitted_width", "submitted_height", "dimension_unit", "split_and_assembly_accepted", "estimated_section_count", "design_estimate_min", "print_estimate_min", "estimated_total_min"]) assert.match(sql, new RegExp(column));
   assert.match(sql, /design_price \+ coalesce\(print_estimate_min, 0\)/i);
   assert.doesNotMatch(sql, /design_price\s*\*\s*p_quantity/i);
   assert.match(sql, /p_quantity <> 1[\s\S]*Design-only estimates cannot include physical printing/i);
   assert.match(sql, /compute_print_estimate\([\s\S]*'ready',p_quantity[\s\S]*'none'/i);
   assert.match(sql, /virtual_bounding_box/);
+  assert.match(sql, /greatest\(p_model_length_mm,p_model_width_mm,p_model_height_mm\) > 250[\s\S]*p_split_and_assembly_accepted/i);
 });
 
 test("email and admin review show separated estimate components", () => {

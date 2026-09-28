@@ -1,5 +1,5 @@
 import { createVirtualBoundingBoxModel, loadAndPreviewModel, sliceModel } from "./model-slicer.js";
-import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, resolveServiceIntent, serviceLabel, unitMaximum } from "./service-intent.mjs";
+import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrintSplitting, resolveServiceIntent, serviceLabel, splitDimensionsForPrint, unitMaximum } from "./service-intent.mjs";
 
 (function () {
   "use strict";
@@ -9,7 +9,8 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, resolveServi
   const message = document.querySelector("#form-message");
   const config = window.MUCCI_CONFIG || {};
   const maxFileBytes = 25 * 1024 * 1024;
-  const maxModelDimensionMm = 250;
+  const maxPrintableSectionDimensionMm = 250;
+  const maxFinishedDimensionMm = 1000;
   const supportedExtensions = ["stl", "3mf", "obj", "step", "stp"];
   const gcodeTime = window.MucciGcodeTime;
   let calculatedPayload = null;
@@ -76,6 +77,9 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, resolveServi
       form.elements[name].required = needsNoFileDetails;
       form.elements[name].disabled = !needsNoFileDetails;
     });
+    const splitInput = form.elements.split_and_assembly_accepted;
+    splitInput.disabled = !needsNoFileDetails;
+    if (!needsNoFileDetails) splitInput.checked = false;
     document.querySelector("#quantity-section").classList.toggle("hidden", designOnly || (needsNoFileDetails && !designAndPrint));
     document.querySelector("#print-profile-section").classList.toggle("hidden", needsNoFileDetails);
     document.querySelector("#colour-section").classList.toggle("hidden", designOnly || (needsNoFileDetails && !designAndPrint));
@@ -85,6 +89,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, resolveServi
     form.querySelectorAll('[name="assembly_required"]').forEach((input) => { input.disabled = designOnly || (needsNoFileDetails && !designAndPrint); input.required = includesPhysicalPrinting(intent) && (!needsNoFileDetails || designAndPrint); });
     document.querySelector("#service-intent-error").textContent = "";
     document.querySelector("#dimensions-error").textContent = "";
+    updateSplitConfirmation();
     [...form.querySelectorAll("fieldset:not(.hidden)")].forEach((fieldset, index) => {
       const step = fieldset.querySelector("legend > span");
       if (step) step.textContent = String(index + 1);
@@ -98,7 +103,10 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, resolveServi
       throw validationError("Choose what service you need.");
     }
     try {
-      const dimensions = dimensionsToMm(dimensionValues(), maxModelDimensionMm);
+      const dimensions = dimensionsToMm(dimensionValues(), maxFinishedDimensionMm);
+      if (requiresPrintSplitting(dimensions, maxPrintableSectionDimensionMm) && !form.elements.split_and_assembly_accepted.checked) {
+        throw new Error("Confirm that splitting the part into printable sections and assembly is acceptable.");
+      }
       document.querySelector("#dimensions-error").textContent = "";
       return dimensions;
     } catch (error) {
@@ -109,8 +117,23 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, resolveServi
 
   function updateDimensionLimits() {
     const unit = form.elements.dimension_unit.value;
-    const maximum = unitMaximum(unit, maxModelDimensionMm);
+    const maximum = unitMaximum(unit, maxFinishedDimensionMm);
     ["dimension_length", "dimension_width", "dimension_height"].forEach((name) => { form.elements[name].max = String(maximum); });
+  }
+
+  function updateSplitConfirmation() {
+    const row = document.querySelector("#split-confirmation-row");
+    const input = form.elements.split_and_assembly_accepted;
+    let oversized = false;
+    if (selected("file_status") === "design") {
+      try {
+        oversized = requiresPrintSplitting(dimensionsToMm(dimensionValues(), maxFinishedDimensionMm), maxPrintableSectionDimensionMm);
+      } catch (_) {}
+    }
+    row.classList.toggle("hidden", !oversized);
+    input.required = oversized;
+    input.disabled = selected("file_status") !== "design";
+    if (!oversized) input.checked = false;
   }
 
   function payloadFromForm() {
@@ -118,7 +141,8 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, resolveServi
     const intent = resolveServiceIntent(values.file_status, values.service_intent);
     const physicalPrinting = includesPhysicalPrinting(intent);
     const usesSlicer = physicalPrinting && slicedPrintTime;
-    const dimensions = values.file_status === "design" ? dimensionsToMm({ length:values.dimension_length, width:values.dimension_width, height:values.dimension_height, unit:values.dimension_unit }, maxModelDimensionMm) : null;
+    const dimensions = values.file_status === "design" ? dimensionsToMm({ length:values.dimension_length, width:values.dimension_width, height:values.dimension_height, unit:values.dimension_unit }, maxFinishedDimensionMm) : null;
+    const splitAccepted = Boolean(dimensions && requiresPrintSplitting(dimensions, maxPrintableSectionDimensionMm) && values.split_and_assembly_accepted === "true");
     return {
       p_file_status: values.file_status,
       p_service_intent: intent,
@@ -128,7 +152,8 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, resolveServi
       p_filament_grams_per_item: usesSlicer ? slicedPrintTime.grams : null,
       p_colour_count: physicalPrinting ? values.colour_count : "1",
       p_design_level: values.design_level,
-      p_assembly_required: physicalPrinting && values.assembly_required === "true",
+      p_assembly_required: physicalPrinting && (values.assembly_required === "true" || splitAccepted),
+      p_split_and_assembly_accepted:splitAccepted,
       p_model_length_mm: dimensions?.x || loadedModel?.dimensions?.x || null,
       p_model_width_mm: dimensions?.y || loadedModel?.dimensions?.y || null,
       p_model_height_mm: dimensions?.z || loadedModel?.dimensions?.z || null
@@ -200,10 +225,11 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, resolveServi
         document.querySelector("#slice-status").textContent = "";
       } else if (intent === SERVICE_INTENTS.DESIGN_AND_PRINT) {
         button.textContent = "Preparing preliminary print estimate…";
-        const virtualModel = createVirtualBoundingBoxModel(noFileDimensions);
+        const splitPlan = splitDimensionsForPrint(noFileDimensions, maxPrintableSectionDimensionMm);
+        const virtualModel = createVirtualBoundingBoxModel(splitPlan.sectionDimensions);
         const sliced = await sliceModel(virtualModel, "preliminary", slicingProgress);
         if (!sliced.seconds) throw new Error("The preliminary print estimate could not be prepared from these dimensions.");
-        slicedPrintTime = { ...gcodeTime.toHoursMinutes(sliced.seconds), grams:sliced.filamentGrams };
+        slicedPrintTime = { ...gcodeTime.toHoursMinutes(sliced.seconds * splitPlan.sectionCount), grams:sliced.filamentGrams * splitPlan.sectionCount, sections:splitPlan.sectionCount };
         document.querySelector("#slice-status").textContent = "";
       } else {
         slicedPrintTime = null;
@@ -229,12 +255,16 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, resolveServi
 
   function renderEstimate(estimate) {
     const intent = calculatedPayload.p_service_intent;
+    const plannedSectionCount = calculatedPayload.p_split_and_assembly_accepted
+      ? splitDimensionsForPrint({ x:calculatedPayload.p_model_length_mm, y:calculatedPayload.p_model_width_mm, z:calculatedPayload.p_model_height_mm }, maxPrintableSectionDimensionMm).sectionCount
+      : 1;
     const printingLabel = intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? "Preliminary 3D Print Estimate" : "Physical 3D Printing";
     const designValue = range(estimate.design_estimate_min, estimate.design_estimate_max);
     const printValue = estimate.print_estimate_min == null ? "Not included" : `${range(estimate.print_estimate_min, estimate.print_estimate_max)} CAD`;
     const totalValue = range(estimate.estimated_total_min, estimate.estimated_total_max);
-    const preliminaryNote = intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? '<p class="notice">This is a preliminary printing estimate based on the dimensions provided. Final printing cost may change once the finished 3D model is available. The overall dimensions are used as a conservative planning boundary; this does not assume the finished object is a solid block.</p>' : "";
-    const designOnlyNote = intent === SERVICE_INTENTS.DESIGN_ONLY ? '<p class="notice">This estimate covers creation of the 3D model only. Physical printing is not included.</p>' : "";
+    const sectionNote = calculatedPayload.p_split_and_assembly_accepted ? ` The estimate plans for approximately ${escapeHtml(plannedSectionCount)} printable sections, with final cuts and joints confirmed during review.` : "";
+    const preliminaryNote = intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? `<p class="notice">This is a preliminary printing estimate based on the dimensions provided. Final printing cost may change once the finished 3D model is available. The overall dimensions are used as a conservative planning boundary; this does not assume the finished object is a solid block.${sectionNote}</p>` : "";
+    const designOnlyNote = intent === SERVICE_INTENTS.DESIGN_ONLY ? `<p class="notice">This estimate covers creation of the 3D model only. Physical printing is not included.${sectionNote}</p>` : "";
     const quantityMeta = intent === SERVICE_INTENTS.DESIGN_ONLY ? "" : `<span><strong>Quantity:</strong> ${escapeHtml(calculatedPayload.p_quantity)}</span>`;
     result.classList.remove("hidden");
     result.innerHTML = `<p class="eyebrow">Your estimate is ready</p><h2>Estimate breakdown</h2><dl class="quote-breakdown"><div><dt>Service</dt><dd>${escapeHtml(serviceLabel(intent))}</dd></div>${intent === SERVICE_INTENTS.PRINT_ONLY ? "" : `<div><dt>3D Design Estimate</dt><dd>${designValue} CAD</dd></div>`}<div><dt>${printingLabel}</dt><dd>${printValue}</dd></div><div class="quote-total"><dt>Estimated ${intent === SERVICE_INTENTS.DESIGN_ONLY ? "Design" : "Project"} Total</dt><dd>${totalValue} CAD</dd></div></dl>${designOnlyNote}${preliminaryNote}<div class="result-meta">${quantityMeta}${estimate.print_price_per_item_min == null ? "" : `<span><strong>Approximate printing price per item:</strong> ${range(estimate.print_price_per_item_min, estimate.print_price_per_item_max)} CAD</span>`}</div>${estimate.requires_manual_review ? '<p class="notice"><strong>Review required.</strong> This project needs manual confirmation before final pricing.</p>' : ""}<p>Estimate only. Final pricing is confirmed after your project and files are reviewed.</p><p>Submitting an estimate does not create an order or charge you. If you contacted us through Etsy, your final order and payment will be completed through Etsy.</p><div class="result-actions"><button id="submit-estimate" class="primary-button" type="button">SUBMIT ESTIMATE</button></div><p id="submit-message" role="alert"></p>`;
@@ -254,6 +284,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, resolveServi
       const values = Object.fromEntries(new FormData(form));
       const intent = calculatedPayload.p_service_intent;
       const physicalPrinting = includesPhysicalPrinting(intent);
+      const submittedDimensions = values.file_status === "design" ? dimensionsToMm({ length:values.dimension_length, width:values.dimension_width, height:values.dimension_height, unit:values.dimension_unit }, maxFinishedDimensionMm) : null;
       const selectedFile = validateFile();
       let filePath = null;
       if (selectedFile) {
@@ -269,6 +300,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, resolveServi
         p_submitted_width: values.file_status === "design" ? Number(values.dimension_width) : null,
         p_submitted_height: values.file_status === "design" ? Number(values.dimension_height) : null,
         p_dimension_unit: values.file_status === "design" ? values.dimension_unit : null,
+        p_estimated_section_count: calculatedPayload.p_split_and_assembly_accepted ? splitDimensionsForPrint(submittedDimensions, maxPrintableSectionDimensionMm).sectionCount : 1,
         p_print_time_source: intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? "virtual_bounding_box" : physicalPrinting ? "slicer" : "unknown",
         p_print_profile: intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? "standard" : physicalPrinting ? values.print_profile : null,
         p_notes: values.notes.trim() || null
@@ -309,6 +341,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, resolveServi
     if (event.target.name === "file_status") renderDesignOptions();
     if (["file_status", "service_intent"].includes(event.target.name)) updateConditionalFields();
     if (event.target.name === "dimension_unit") updateDimensionLimits();
+    if (["file_status", "dimension_length", "dimension_width", "dimension_height", "dimension_unit"].includes(event.target.name)) updateSplitConfirmation();
     if (calculatedPayload) { calculatedPayload = null; calculatedResult = null; result.classList.add("hidden"); result.innerHTML = ""; }
   });
   form.addEventListener("invalid", (event) => {
@@ -318,6 +351,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, resolveServi
   form.addEventListener("input", (event) => {
     if (event.target.name === "service_intent") document.querySelector("#service-intent-error").textContent = "";
     if (["dimension_length", "dimension_width", "dimension_height", "dimension_unit"].includes(event.target.name)) document.querySelector("#dimensions-error").textContent = "";
+    if (["dimension_length", "dimension_width", "dimension_height", "dimension_unit"].includes(event.target.name)) updateSplitConfirmation();
   });
   document.querySelector("#model-file").addEventListener("change", handleModelFile);
   form.addEventListener("submit", calculate);

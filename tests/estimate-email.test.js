@@ -37,10 +37,12 @@ test("design-only email excludes physical printing details", () => {
     ...estimate,
     service_intent:"DESIGN_ONLY",
     file_status:"design",
-    submitted_length:4,
-    submitted_width:3,
-    submitted_height:2,
+    submitted_length:17,
+    submitted_width:14,
+    submitted_height:3,
     dimension_unit:"inches",
+    split_and_assembly_accepted:true,
+    estimated_section_count:4,
     design_estimate_min:120,
     design_estimate_max:120,
     print_estimate_min:null,
@@ -53,6 +55,7 @@ test("design-only email excludes physical printing details", () => {
   assert.equal(values["Service selected"], "3D Design Only");
   assert.equal(values["Physical print estimate"], "Not included");
   assert.equal(values["Estimated total"], "$120.00 CAD");
-  assert.equal(values["Finished dimensions"], "4 × 3 × 2 inches");
+  assert.equal(values["Finished dimensions"], "17 × 14 × 3 inches");
+  assert.equal(values["Split and assembly approved"], "Yes — approximately 4 printable sections");
   assert.doesNotMatch(labels.join(" "), /Print time|Filament|Material total|Colours|Purge allowance/);
 });

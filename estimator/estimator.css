@@ -49,6 +49,10 @@ legend span { width:34px; height:34px; display:inline-grid; place-items:center; 
 .conditional-question > span { margin-left:6px; color:var(--error); font:700 .72rem/1 "DM Sans",sans-serif; letter-spacing:.08em; text-transform:uppercase; }
 .dimension-fields { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
 .dimension-fields .field { margin-top:12px; }
+.split-confirmation { display:flex; align-items:flex-start; gap:12px; margin-top:18px; padding:14px; border:1px solid var(--ink); border-radius:8px; background:var(--pale); cursor:pointer; }
+.split-confirmation input { width:21px; height:21px; flex:0 0 auto; margin:2px 0 0; accent-color:var(--ink); }
+.split-confirmation span { display:grid; gap:4px; line-height:1.35; }
+.split-confirmation small { color:#496479; font-weight:400; }
 .field-error { min-height:1.25em; margin:10px 0 0; color:var(--error); font-size:.9rem; font-weight:700; }
 .field { display:grid; gap:8px; margin-top:20px; font-weight:700; }
 .field.compact { max-width:210px; }

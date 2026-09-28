@@ -33,8 +33,13 @@ claim that the finished object will be a solid block. Design, preliminary
 printing, and combined totals remain separate in the customer result, database,
 owner email, and admin review.
 
-The configured build volume is 250 × 250 × 250 mm. Models exceeding any one
-of those dimensions are rejected before slicing.
+The printer build volume remains 250 × 250 × 250 mm. Finished dimensions up to
+1000 mm per axis are accepted for no-file design requests. If any finished
+dimension exceeds 250 mm, the customer must approve splitting the design into
+printable sections and assembly. The preliminary printing calculation uses
+balanced sections that each fit the build volume, stores the estimated section
+count, and always requires manual confirmation. Uploaded models must still fit
+the build volume because automatic geometry cutting is not performed.
 
 The viewer and slicer support touch input on phones and tablets. Complex models
 can exceed a mobile browser's available memory; in that case the estimator asks
@@ -106,7 +111,8 @@ the contact details already saved with estimates, and Orders / Projects shows
 accepted, in-production, and completed estimate records.
 
 Migration `017_separate_design_and_print_estimates.sql` adds the service intent,
-submitted dimension, and separate design/printing/total price fields. It keeps
+submitted dimension, oversized-part acceptance/section count, and separate
+design/printing/total price fields. It keeps
 the legacy estimator RPCs available for compatibility while new form
 submissions use the component-based calculation and submission RPCs.
 

@@ -14,7 +14,7 @@ export function resolveServiceIntent(fileStatus, noFileIntent = "") {
   return "";
 }
 
-export function dimensionsToMm({ length, width, height, unit }, maximumMm = 250) {
+export function dimensionsToMm({ length, width, height, unit }, maximumMm = 1000) {
   const factor = UNIT_TO_MM[unit];
   if (!factor) throw new Error("Choose mm, cm, or inches for the dimensions.");
   const values = [length, width, height].map(Number);
@@ -24,9 +24,23 @@ export function dimensionsToMm({ length, width, height, unit }, maximumMm = 250)
   return { x:millimetres[0], y:millimetres[1], z:millimetres[2] };
 }
 
-export function unitMaximum(unit, maximumMm = 250) {
+export function unitMaximum(unit, maximumMm = 1000) {
   const factor = UNIT_TO_MM[unit] || 1;
   return Number((maximumMm / factor).toFixed(unit === "inches" ? 3 : 2));
+}
+
+export function requiresPrintSplitting({ x, y, z }, printableMaximumMm = 250) {
+  return [x, y, z].some((value) => Number(value) > printableMaximumMm);
+}
+
+export function splitDimensionsForPrint({ x, y, z }, printableMaximumMm = 250) {
+  if (![x, y, z].every((value) => Number.isFinite(value) && value > 0)) throw new Error("Enter valid finished dimensions before planning printable sections.");
+  const counts = [x, y, z].map((value) => Math.ceil(value / printableMaximumMm));
+  return {
+    sectionDimensions:{ x:x / counts[0], y:y / counts[1], z:z / counts[2] },
+    sectionCount:counts[0] * counts[1] * counts[2],
+    axisCounts:{ x:counts[0], y:counts[1], z:counts[2] }
+  };
 }
 
 export function includesPhysicalPrinting(intent) {

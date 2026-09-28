@@ -162,7 +162,9 @@
       [estimate.service_intent === "DESIGN_AND_PRINT" ? "Preliminary print estimate" : "Physical print estimate", estimate.print_estimate_min == null ? "Not included" : `${displayPrice({ estimated_price:estimate.print_estimate_min, estimated_price_max:estimate.print_estimate_max })} CAD`],
       ["Estimated project total", `${displayPrice({ estimated_price:estimate.estimated_total_min ?? estimate.estimated_price, estimated_price_max:estimate.estimated_total_max ?? estimate.estimated_price_max })} CAD`],
       ["File status", label(estimate.file_status)], ["Uploaded file", estimate.original_file_name || (estimate.file_path ? "Uploaded model" : "Not provided")],
-      ["Dimensions", dimensions], ["Design level", label(estimate.design_level)]
+      ["Dimensions", dimensions],
+      ["Split and assembly approved", estimate.split_and_assembly_accepted ? `Yes — approximately ${Number(estimate.estimated_section_count || 1)} printable sections` : "Not required"],
+      ["Design level", label(estimate.design_level)]
     ];
     if (estimate.service_intent !== "DESIGN_ONLY") rows.push(
       ["Quantity", estimate.quantity], ["Size category", label(estimate.size_category)], ["Material", estimate.material || "PLA"],

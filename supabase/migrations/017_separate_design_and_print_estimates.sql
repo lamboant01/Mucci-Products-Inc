@@ -23,6 +23,9 @@ alter table public.print_estimates add column if not exists submitted_height num
   check (submitted_height is null or submitted_height > 0);
 alter table public.print_estimates add column if not exists dimension_unit text
   check (dimension_unit is null or dimension_unit in ('mm','cm','inches'));
+alter table public.print_estimates add column if not exists split_and_assembly_accepted boolean not null default false;
+alter table public.print_estimates add column if not exists estimated_section_count integer not null default 1
+  check (estimated_section_count between 1 and 64);
 
 alter table public.print_estimates add column if not exists design_estimate_min numeric(12,2) not null default 0
   check (design_estimate_min >= 0);
@@ -108,6 +111,7 @@ create or replace function public.calculate_service_estimate(
   p_print_hours_per_item integer, p_print_minutes_per_item integer,
   p_filament_grams_per_item numeric, p_colour_count text,
   p_design_level text, p_assembly_required boolean,
+  p_split_and_assembly_accepted boolean,
   p_model_length_mm numeric, p_model_width_mm numeric, p_model_height_mm numeric
 )
 returns table(
@@ -136,8 +140,14 @@ begin
   if p_file_status = 'design' and (
     p_model_length_mm is null or p_model_width_mm is null or p_model_height_mm is null
     or p_model_length_mm <= 0 or p_model_width_mm <= 0 or p_model_height_mm <= 0
-    or p_model_length_mm > 250 or p_model_width_mm > 250 or p_model_height_mm > 250
-  ) then raise exception 'Enter finished dimensions no larger than 250 mm'; end if;
+    or p_model_length_mm > 1000 or p_model_width_mm > 1000 or p_model_height_mm > 1000
+  ) then raise exception 'Enter finished dimensions no larger than 1000 mm'; end if;
+  if p_file_status = 'design'
+    and greatest(p_model_length_mm,p_model_width_mm,p_model_height_mm) > 250
+    and not coalesce(p_split_and_assembly_accepted,false)
+  then raise exception 'Confirm that splitting and assembly is acceptable for this oversized part'; end if;
+  if p_file_status <> 'design' and coalesce(p_split_and_assembly_accepted,false)
+  then raise exception 'Split acceptance is only available for projects without a model file'; end if;
 
   design_price := case p_design_level
     when 'none' then 0 when 'simple' then cfg.design_simple
@@ -180,17 +190,18 @@ end;
 $$;
 
 revoke all on function public.calculate_service_estimate(
-  text,text,integer,integer,integer,numeric,text,text,boolean,numeric,numeric,numeric
+  text,text,integer,integer,integer,numeric,text,text,boolean,boolean,numeric,numeric,numeric
 ) from public;
 grant execute on function public.calculate_service_estimate(
-  text,text,integer,integer,integer,numeric,text,text,boolean,numeric,numeric,numeric
+  text,text,integer,integer,integer,numeric,text,text,boolean,boolean,numeric,numeric,numeric
 ) to anon, authenticated;
 
 create or replace function public.submit_service_estimate(
   p_file_path text, p_original_file_name text, p_file_status text, p_service_intent text,
   p_quantity integer, p_print_hours_per_item integer, p_print_minutes_per_item integer,
   p_filament_grams_per_item numeric, p_colour_count text, p_design_level text,
-  p_assembly_required boolean, p_print_time_source text, p_print_profile text,
+  p_assembly_required boolean, p_split_and_assembly_accepted boolean,
+  p_estimated_section_count integer, p_print_time_source text, p_print_profile text,
   p_name text, p_notes text, p_model_length_mm numeric, p_model_width_mm numeric,
   p_model_height_mm numeric, p_submitted_length numeric, p_submitted_width numeric,
   p_submitted_height numeric, p_dimension_unit text
@@ -214,6 +225,7 @@ declare
 begin
   if clean_name is not null and char_length(clean_name) > 120 then raise exception 'Name is too long'; end if;
   if p_notes is not null and char_length(p_notes) > 3000 then raise exception 'Notes are too long'; end if;
+  if p_estimated_section_count is null or p_estimated_section_count < 1 or p_estimated_section_count > 64 then raise exception 'Invalid printable section count'; end if;
   if p_file_path is not null and p_file_path !~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\.(stl|3mf|obj|step|stp)$' then raise exception 'Invalid uploaded file path'; end if;
   if clean_file_name is not null and (p_file_path is null or char_length(clean_file_name) > 255 or clean_file_name ~ '[[:cntrl:]]') then raise exception 'Invalid model filename'; end if;
   if p_service_intent in ('PRINT_ONLY','MODIFY_AND_PRINT') and (p_file_path is null or p_print_time_source <> 'slicer' or p_print_profile not in ('standard','draft')) then raise exception 'A sliced model file is required'; end if;
@@ -228,14 +240,25 @@ begin
     if abs(p_model_length_mm - p_submitted_length * unit_factor) > 0.02
       or abs(p_model_width_mm - p_submitted_width * unit_factor) > 0.02
       or abs(p_model_height_mm - p_submitted_height * unit_factor) > 0.02 then raise exception 'Finished dimensions do not match the selected unit'; end if;
+    if greatest(p_model_length_mm,p_model_width_mm,p_model_height_mm) > 250 then
+      if not coalesce(p_split_and_assembly_accepted,false) then raise exception 'Oversized parts require split and assembly acceptance'; end if;
+      if p_estimated_section_count <> ceil(p_model_length_mm / 250.0)::integer
+        * ceil(p_model_width_mm / 250.0)::integer
+        * ceil(p_model_height_mm / 250.0)::integer then raise exception 'Invalid printable section count'; end if;
+    elsif coalesce(p_split_and_assembly_accepted,false) or p_estimated_section_count <> 1 then
+      raise exception 'Split acceptance is only required for oversized parts';
+    end if;
   elsif p_submitted_length is not null or p_submitted_width is not null or p_submitted_height is not null or p_dimension_unit is not null then
     raise exception 'Submitted dimensions are only accepted when no model file exists';
   end if;
+  if p_file_status <> 'design' and (coalesce(p_split_and_assembly_accepted,false) or p_estimated_section_count <> 1)
+  then raise exception 'Split acceptance is only available for projects without a model file'; end if;
 
   select * into calc from public.calculate_service_estimate(
     p_file_status,p_service_intent,p_quantity,p_print_hours_per_item,
     p_print_minutes_per_item,p_filament_grams_per_item,p_colour_count,
-    p_design_level,p_assembly_required,p_model_length_mm,p_model_width_mm,p_model_height_mm
+    p_design_level,p_assembly_required,p_split_and_assembly_accepted,
+    p_model_length_mm,p_model_width_mm,p_model_height_mm
   );
   select * into cfg from public.print_estimator_config where singleton = true;
   purge_percent := coalesce((cfg.colour_purge_percent ->> p_colour_count)::numeric, 0);
@@ -252,7 +275,8 @@ begin
         estimated_price,estimated_price_max,estimated_price_per_item,estimated_price_per_item_max,
         requires_manual_review,print_time_source,print_profile,purge_waste_percent,
         model_width_mm,model_depth_mm,model_height_mm,submitted_length,submitted_width,
-        submitted_height,dimension_unit,design_estimate_min,design_estimate_max,
+        submitted_height,dimension_unit,split_and_assembly_accepted,estimated_section_count,
+        design_estimate_min,design_estimate_max,
         print_estimate_min,print_estimate_max,estimated_total_min,estimated_total_max,
         final_price,final_quantity
       ) values (
@@ -265,6 +289,7 @@ begin
         calc.requires_manual_review,p_print_time_source,p_print_profile,purge_percent,
         round(p_model_length_mm,2),round(p_model_width_mm,2),round(p_model_height_mm,2),
         p_submitted_length,p_submitted_width,p_submitted_height,p_dimension_unit,
+        coalesce(p_split_and_assembly_accepted,false),p_estimated_section_count,
         calc.design_estimate_min,calc.design_estimate_max,calc.print_estimate_min,
         calc.print_estimate_max,calc.estimated_total_min,calc.estimated_total_max,
         calc.estimated_total_max,p_quantity
@@ -288,10 +313,10 @@ end;
 $$;
 
 revoke all on function public.submit_service_estimate(
-  text,text,text,text,integer,integer,integer,numeric,text,text,boolean,text,text,text,text,
+  text,text,text,text,integer,integer,integer,numeric,text,text,boolean,boolean,integer,text,text,text,text,
   numeric,numeric,numeric,numeric,numeric,numeric,text
 ) from public;
 grant execute on function public.submit_service_estimate(
-  text,text,text,text,integer,integer,integer,numeric,text,text,boolean,text,text,text,text,
+  text,text,text,text,integer,integer,integer,numeric,text,text,boolean,boolean,integer,text,text,text,text,
   numeric,numeric,numeric,numeric,numeric,numeric,text
 ) to anon, authenticated;

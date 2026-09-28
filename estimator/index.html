@@ -65,6 +65,10 @@
                 <label class="field">Height<input type="number" name="dimension_height" min="0.01" step="any" inputmode="decimal" /></label>
                 <label class="field">Unit<select name="dimension_unit"><option value="">Choose unit</option><option value="mm">mm</option><option value="cm">cm</option><option value="inches">inches</option></select></label>
               </div>
+              <label id="split-confirmation-row" class="split-confirmation hidden">
+                <input type="checkbox" name="split_and_assembly_accepted" value="true" />
+                <span><b>I approve splitting and assembly.</b><small>This finished part is larger than the 250 × 250 × 250 mm print area. I understand the design may be divided into printable sections and assembled after printing.</small></span>
+              </label>
               <p id="dimensions-error" class="field-error" role="alert"></p>
             </div>
             <label id="file-upload-row" class="field hidden">3D model file
