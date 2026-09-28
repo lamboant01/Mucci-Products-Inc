@@ -5,9 +5,9 @@ import { OBJLoader } from "https://esm.sh/three@0.180.0/examples/jsm/loaders/OBJ
 import { ThreeMFLoader } from "https://esm.sh/three@0.180.0/examples/jsm/loaders/3MFLoader.js";
 import { STLExporter } from "https://esm.sh/three@0.180.0/examples/jsm/exporters/STLExporter.js";
 import { createSlicerClient } from "./vendor/three-slicer/engine/src/client.js?v=stats-only-time-v1";
-import { SLICER_PROFILES } from "./slicer-config.js";
-import { filamentDensity, filamentGrams } from "./filament-math.mjs";
-import { slicerFilamentLength, slicerTimeSeconds } from "./slicer-result.mjs";
+import { SLICER_PROFILES } from "./slicer-config.js?v=mobile-large-parts-v2";
+import { filamentDensity, filamentGrams } from "./filament-math.mjs?v=mobile-large-parts-v2";
+import { slicerFilamentLength, slicerTimeSeconds } from "./slicer-result.mjs?v=mobile-large-parts-v2";
 
 let viewer;
 let currentGroup;

@@ -1,5 +1,5 @@
-import { createVirtualBoundingBoxModel, loadAndPreviewModel, sliceModel } from "./model-slicer.js";
-import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrintSplitting, resolveServiceIntent, serviceLabel, splitDimensionsForPrint, unitMaximum } from "./service-intent.mjs";
+import { createVirtualBoundingBoxModel, loadAndPreviewModel, sliceModel } from "./model-slicer.js?v=mobile-large-parts-v2";
+import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrintSplitting, resolveServiceIntent, serviceLabel, splitDimensionsForPrint, unitMaximum } from "./service-intent.mjs?v=mobile-large-parts-v2";
 
 (function () {
   "use strict";
@@ -12,7 +12,8 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
   const maxReferenceImageBytes = 10 * 1024 * 1024;
   const maxReferenceImages = 10;
   const maxPrintableSectionDimensionMm = 250;
-  const maxFinishedDimensionMm = 1000;
+  const maxFinishedDimensionMm = 2500;
+  const maxPrintableSections = 64;
   const supportedExtensions = ["stl", "3mf", "obj", "step", "stp"];
   const supportedReferenceExtensions = ["png", "jpg", "jpeg", "webp", "heic", "heif", "gif"];
   const referenceContentTypes = Object.freeze({ png:"image/png", jpg:"image/jpeg", jpeg:"image/jpeg", webp:"image/webp", heic:"image/heic", heif:"image/heif", gif:"image/gif" });
@@ -111,6 +112,8 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
     }
     try {
       const dimensions = dimensionsToMm(dimensionValues(), maxFinishedDimensionMm);
+      const splitPlan = splitDimensionsForPrint(dimensions, maxPrintableSectionDimensionMm);
+      if (splitPlan.sectionCount > maxPrintableSections) throw new Error(`These dimensions require more than ${maxPrintableSections} printable sections. Contact us through Etsy for a manual project review.`);
       if (requiresPrintSplitting(dimensions, maxPrintableSectionDimensionMm) && !form.elements.split_and_assembly_accepted.checked) {
         throw new Error("Confirm that splitting the part into printable sections and assembly is acceptable.");
       }
@@ -126,6 +129,14 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
     const unit = form.elements.dimension_unit.value;
     const maximum = unitMaximum(unit, maxFinishedDimensionMm);
     ["dimension_length", "dimension_width", "dimension_height"].forEach((name) => { form.elements[name].max = String(maximum); });
+    const unitLabel = unit || "mm";
+    document.querySelector("#dimension-limit-help").textContent = `Maximum ${maximum} ${unitLabel} per dimension.`;
+  }
+
+  function dimensionValidationMessage() {
+    const unit = form.elements.dimension_unit.value;
+    if (!unit) return "Complete the length, width, height, and unit with values greater than zero.";
+    return `Enter length, width, and height greater than zero and no more than ${unitMaximum(unit, maxFinishedDimensionMm)} ${unit}.`;
   }
 
   function updateSplitConfirmation() {
@@ -387,7 +398,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
   });
   form.addEventListener("invalid", (event) => {
     if (event.target.name === "service_intent") document.querySelector("#service-intent-error").textContent = "Choose 3D Design Only or 3D Design + 3D Printing.";
-    if (["dimension_length", "dimension_width", "dimension_height", "dimension_unit"].includes(event.target.name)) document.querySelector("#dimensions-error").textContent = "Complete the length, width, height, and unit with values greater than zero.";
+    if (["dimension_length", "dimension_width", "dimension_height", "dimension_unit"].includes(event.target.name)) document.querySelector("#dimensions-error").textContent = dimensionValidationMessage();
   }, true);
   form.addEventListener("input", (event) => {
     if (event.target.name === "service_intent") document.querySelector("#service-intent-error").textContent = "";

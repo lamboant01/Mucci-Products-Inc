@@ -47,7 +47,7 @@ reduce follow-up delays. Reference images remain private and are copied into the
 same quote-code Google Drive folder as the uploaded model.
 
 The printer build volume remains 250 × 250 × 250 mm. Finished dimensions up to
-1000 mm per axis are accepted for no-file design requests. If any finished
+2500 mm per axis are accepted for no-file design requests. If any finished
 dimension exceeds 250 mm, the customer must approve splitting the design into
 printable sections and assembly. The preliminary printing calculation uses
 balanced sections that each fit the build volume, stores the estimated section
@@ -61,7 +61,7 @@ on the pinned Three.js and OCCT browser modules. The AGPL Three Slicer engine,
 its licence, and its third-party notices are kept under
 `estimator/vendor/three-slicer/` so the worker does not depend on a remote path.
 
-Run migrations 004 through 019 in order after migrations 001 through 003. All
+Run migrations 004 through 020 in order after migrations 001 through 003. All
 private pricing values and fallback-time assumptions are centralized in
 the single-row `print_estimator_config` table created by that migration. Update
 that row in Supabase to change pricing without editing the public website.
@@ -135,6 +135,9 @@ schema cache.
 Migration `019_reference_images_and_a1_speed_update.sql` adds validated private
 reference-image metadata, narrow upload policies, and the submission RPC used
 by the attachment-enabled form.
+Migration `020_larger_finished_dimensions.sql` raises the no-file finished-part
+limit to 2500 mm per dimension while retaining split approval and the existing
+64-section safeguard.
 
 The protected admin area is available at `/admin` after Google sign-in and now
 includes Dashboard, Requests / Estimates, Orders / Projects, Customers,

@@ -21,8 +21,10 @@ test("no-file services require an explicit design intent and convert dimensions"
   const splitPlan = module.splitDimensionsForPrint(oversized);
   assert.equal(splitPlan.sectionCount, 4);
   assert.ok(Object.values(splitPlan.sectionDimensions).every((value) => value <= 250));
-  assert.equal(module.unitMaximum("inches"), 39.37);
-  assert.throws(() => module.dimensionsToMm({ length:1001, width:2, height:3, unit:"mm" }), /1000 mm or less/);
+  assert.equal(module.unitMaximum("cm"), 250);
+  assert.equal(module.unitMaximum("inches"), 98.425);
+  assert.deepEqual(module.dimensionsToMm({ length:100, width:15, height:200, unit:"cm" }), { x:1000, y:150, z:2000 });
+  assert.throws(() => module.dimensionsToMm({ length:2501, width:2, height:3, unit:"mm" }), /2500 mm or less/);
 });
 
 test("quote form presents required service and dimensions without changing existing file choices", () => {
@@ -97,6 +99,13 @@ test("reference-image migration enforces private attachment limits", () => {
   assert.match(sql, /p_reference_files jsonb/);
   assert.match(sql, /to anon/);
   assert.match(sql, /to authenticated/);
+});
+
+test("larger-dimension migration accepts the pictured 200 cm request", () => {
+  const sql = read("supabase", "migrations", "020_larger_finished_dimensions.sql");
+  assert.match(sql, /p_model_length_mm > 2500/);
+  assert.match(sql, /no larger than 2500 mm/);
+  assert.match(sql, /notify pgrst, 'reload schema'/);
 });
 
 test("email and admin review show separated estimate components", () => {

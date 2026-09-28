@@ -14,7 +14,7 @@ export function resolveServiceIntent(fileStatus, noFileIntent = "") {
   return "";
 }
 
-export function dimensionsToMm({ length, width, height, unit }, maximumMm = 1000) {
+export function dimensionsToMm({ length, width, height, unit }, maximumMm = 2500) {
   const factor = UNIT_TO_MM[unit];
   if (!factor) throw new Error("Choose mm, cm, or inches for the dimensions.");
   const values = [length, width, height].map(Number);
@@ -24,7 +24,7 @@ export function dimensionsToMm({ length, width, height, unit }, maximumMm = 1000
   return { x:millimetres[0], y:millimetres[1], z:millimetres[2] };
 }
 
-export function unitMaximum(unit, maximumMm = 1000) {
+export function unitMaximum(unit, maximumMm = 2500) {
   const factor = UNIT_TO_MM[unit] || 1;
   return Number((maximumMm / factor).toFixed(unit === "inches" ? 3 : 2));
 }
