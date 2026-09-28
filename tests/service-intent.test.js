@@ -32,7 +32,8 @@ test("quote form presents required service and dimensions without changing exist
     "What do you need?", "3D Design Only", "3D Design + 3D Printing",
     "Maximum finished dimensions", "Length", "Width", "Height", "Choose unit",
     "I approve splitting and assembly", "Material and colours", "PLA", "PETG", "Wanted colours",
-    "closest available filament match based on current market availability"
+    "closest available filament match based on current market availability",
+    "Please choose honestly", "may change the selected design level and final price"
   ]) assert.match(html, new RegExp(phrase.replace(/[+]/g, "\\+")));
   assert.match(html, /name="service_intent" value="DESIGN_ONLY"/);
   assert.match(html, /name="service_intent" value="DESIGN_AND_PRINT"/);

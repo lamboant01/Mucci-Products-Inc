@@ -73,6 +73,7 @@ legend span { width:34px; height:34px; display:inline-grid; place-items:center; 
 .help-details { margin-top:18px; }
 .help-details summary { cursor:pointer; font-weight:700; }
 .design-help { padding:12px 0 0; font-size:.92rem; line-height:1.5; }
+.design-selection-warning { margin:18px 0 0; padding:13px 14px; border-left:4px solid #d98218; background:#fff4df; color:#633308; font-size:.92rem; line-height:1.5; }
 .design-help p { margin:8px 0; }
 .form-actions { padding-top:8px; }
 .primary-button, .secondary-button { min-height:54px; display:inline-flex; align-items:center; justify-content:center; padding:15px 22px; border:1px solid var(--ink); cursor:pointer; font-weight:800; }
