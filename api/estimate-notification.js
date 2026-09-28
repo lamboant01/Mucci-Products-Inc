@@ -6,7 +6,7 @@ const DEFAULT_FROM_EMAIL = "Mucci Products <order@mucciproducts.com>";
 const SELECT_COLUMNS = [
   "quote_code", "name", "original_file_name", "file_path", "file_status", "quantity",
   "print_hours_per_item", "print_minutes_per_item", "size_category", "colour_count", "desired_colours",
-  "design_level", "assembly_required", "notes", "estimated_material_grams",
+  "design_level", "assembly_required", "material", "notes", "estimated_material_grams",
   "estimated_price", "estimated_price_max", "estimated_price_per_item",
   "estimated_price_per_item_max", "requires_manual_review", "print_time_source",
   "print_profile", "purge_waste_percent", "filament_grams_per_item",

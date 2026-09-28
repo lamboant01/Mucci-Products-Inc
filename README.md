@@ -16,8 +16,9 @@ Efficient Larger Prints (0.24 mm) profiles affect the calculated time. The fixed
 30% infill are defined in `estimator/slicer-config.js` and are not shown in the
 customer interface. Multi-colour purge allowances are stored centrally in the
 private estimator configuration: 0% for one colour, 10% for two, 18% for three,
-and 25% for four. Slicer filament length is converted to PLA weight using
-1.75 mm filament at 1.24 g/cm³. The sliced-print price is $2.50 CAD per total
+and 25% for four. Slicer filament length is converted to weight using 1.75 mm
+filament and the selected density: 1.24 g/cm³ for PLA or 1.27 g/cm³ for PETG.
+The sliced-print price is $2.50 CAD per total
 production hour plus $0.40 CAD per total filament gram, with the colour purge
 allowance applied to both totals. Design and assembly are separate optional
 charges. The total order is subject to a $40 CAD minimum; that minimum is not

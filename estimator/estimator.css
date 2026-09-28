@@ -47,6 +47,7 @@ legend span { width:34px; height:34px; display:inline-grid; place-items:center; 
 .conditional-panel { margin-top:22px; padding:20px; border:1px solid var(--line); border-radius:8px; background:#f7fbfd; }
 .conditional-question { margin:0 0 13px; font:800 1.05rem/1.35 "Manrope",sans-serif; }
 .conditional-question > span { margin-left:6px; color:var(--error); font:700 .72rem/1 "DM Sans",sans-serif; letter-spacing:.08em; text-transform:uppercase; }
+.colour-count-question { margin-top:22px; }
 .dimension-fields { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
 .dimension-fields .field { margin-top:12px; }
 .split-confirmation { display:flex; align-items:flex-start; gap:12px; margin-top:18px; padding:14px; border:1px solid var(--ink); border-radius:8px; background:var(--pale); cursor:pointer; }

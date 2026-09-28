@@ -101,7 +101,13 @@
           </fieldset>
 
           <fieldset id="colour-section">
-            <legend><span>4</span> Number of colours</legend>
+            <legend><span>4</span> Material and colours</legend>
+            <p class="conditional-question">Material <span>Required</span></p>
+            <div class="choice-grid">
+              <label class="choice"><input required type="radio" name="material" value="PLA" /><span><b>PLA</b></span></label>
+              <label class="choice"><input type="radio" name="material" value="PETG" /><span><b>PETG</b></span></label>
+            </div>
+            <p class="conditional-question colour-count-question">Number of colours <span>Required</span></p>
             <div class="choice-grid four-up">
               <label class="choice"><input required type="radio" name="colour_count" value="1" /><span>1</span></label>
               <label class="choice"><input type="radio" name="colour_count" value="2" /><span>2</span></label>

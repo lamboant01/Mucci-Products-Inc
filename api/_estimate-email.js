@@ -71,6 +71,7 @@ function estimateRows(estimate) {
   ];
   if (intent !== "DESIGN_ONLY") rows.push(
     ["Quantity", String(Number(estimate.quantity || 0))],
+    ["Material", text(estimate.material, 12) || "Not provided"],
     ["Print profile", label(estimate.print_profile)],
     ["Print time", printTime],
     ["Filament", estimate.filament_grams_per_item == null ? "Not available" : `${number(estimate.filament_grams_per_item)} g per item`],

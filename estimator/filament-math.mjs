@@ -1,5 +1,12 @@
 export const DEFAULT_FILAMENT_DIAMETER_MM = 1.75;
 export const DEFAULT_FILAMENT_DENSITY_G_CM3 = 1.24;
+export const FILAMENT_DENSITY_G_CM3 = Object.freeze({ PLA:1.24, PETG:1.27 });
+
+export function filamentDensity(material) {
+  const density = FILAMENT_DENSITY_G_CM3[String(material || "").toUpperCase()];
+  if (!density) throw new Error("Choose PLA or PETG for the material.");
+  return density;
+}
 
 export function filamentGrams(
   filamentLengthMm,

@@ -5,7 +5,7 @@ const email = require("../api/_estimate-email");
 const estimate = {
   quote_code:"MP-A42K7", name:"Anthony <Owner>", original_file_name:"bracket.stl",
   file_status:"ready", quantity:2, print_hours_per_item:1, print_minutes_per_item:15,
-  colour_count:"2", desired_colours:"Matte black and teal", design_level:"none", assembly_required:false,
+  colour_count:"2", desired_colours:"Matte black and teal", material:"PLA", design_level:"none", assembly_required:false,
   notes:"Blue & strong", estimated_material_grams:22, estimated_price:72.4,
   estimated_price_max:72.4, requires_manual_review:false, print_time_source:"slicer",
   print_profile:"standard", purge_waste_percent:10, filament_grams_per_item:10
@@ -19,6 +19,7 @@ test("builds an easy-to-read owner estimate email without leaking the private ro
   assert.match(built.text, /Estimated total: \$72\.40 CAD/);
   assert.match(built.text, /Filament: 10\.0 g per item/);
   assert.match(built.text, /Wanted colours: Matte black and teal/);
+  assert.match(built.text, /Material: PLA/);
   assert.match(built.text, /Blue & strong/);
   assert.match(built.text, /Print profile: Standard Detail/);
   assert.equal(built.portalUrl, undefined);

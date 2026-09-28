@@ -86,6 +86,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
     document.querySelector("#assembly-section").classList.toggle("hidden", designOnly || (needsNoFileDetails && !designAndPrint));
     form.querySelectorAll('[name="print_profile"]').forEach((input) => { input.disabled = needsNoFileDetails; input.required = !needsNoFileDetails; });
     form.querySelectorAll('[name="colour_count"]').forEach((input) => { input.disabled = designOnly || (needsNoFileDetails && !designAndPrint); input.required = includesPhysicalPrinting(intent) && (!needsNoFileDetails || designAndPrint); });
+    form.querySelectorAll('[name="material"]').forEach((input) => { input.disabled = designOnly || (needsNoFileDetails && !designAndPrint); input.required = includesPhysicalPrinting(intent) && (!needsNoFileDetails || designAndPrint); });
     form.elements.desired_colours.disabled = designOnly || (needsNoFileDetails && !designAndPrint) || !includesPhysicalPrinting(intent);
     form.elements.desired_colours.required = includesPhysicalPrinting(intent) && (!needsNoFileDetails || designAndPrint);
     form.querySelectorAll('[name="assembly_required"]').forEach((input) => { input.disabled = designOnly || (needsNoFileDetails && !designAndPrint); input.required = includesPhysicalPrinting(intent) && (!needsNoFileDetails || designAndPrint); });
@@ -153,6 +154,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
       p_print_minutes_per_item: usesSlicer ? slicedPrintTime.minutes : null,
       p_filament_grams_per_item: usesSlicer ? slicedPrintTime.grams : null,
       p_colour_count: physicalPrinting ? values.colour_count : "1",
+      p_material: physicalPrinting ? values.material : null,
       p_design_level: values.design_level,
       p_assembly_required: physicalPrinting && (values.assembly_required === "true" || splitAccepted),
       p_split_and_assembly_accepted:splitAccepted,
@@ -219,7 +221,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
         button.textContent = "Preparing model…";
         if (modelLoadPromise) loadedModel = await modelLoadPromise;
         if (!loadedModel) throw new Error("Wait for the 3D model preview to finish, then try again.");
-        const sliced = await sliceModel(loadedModel, printProfile, slicingProgress);
+        const sliced = await sliceModel(loadedModel, printProfile, slicingProgress, selected("material"));
         const parsed = gcodeTime?.parse(sliced.gcode);
         const estimatedSeconds = sliced.seconds || parsed?.seconds;
         if (!estimatedSeconds) throw new Error("The slicer generated G-code but did not return a usable print-time estimate.");
@@ -229,7 +231,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
         button.textContent = "Preparing preliminary print estimate…";
         const splitPlan = splitDimensionsForPrint(noFileDimensions, maxPrintableSectionDimensionMm);
         const virtualModel = createVirtualBoundingBoxModel(splitPlan.sectionDimensions);
-        const sliced = await sliceModel(virtualModel, "preliminary", slicingProgress);
+        const sliced = await sliceModel(virtualModel, "preliminary", slicingProgress, selected("material"));
         if (!sliced.seconds) throw new Error("The preliminary print estimate could not be prepared from these dimensions.");
         slicedPrintTime = { ...gcodeTime.toHoursMinutes(sliced.seconds * splitPlan.sectionCount), grams:sliced.filamentGrams * splitPlan.sectionCount, sections:splitPlan.sectionCount };
         document.querySelector("#slice-status").textContent = "";

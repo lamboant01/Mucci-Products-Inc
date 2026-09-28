@@ -6,7 +6,7 @@ import { ThreeMFLoader } from "https://esm.sh/three@0.180.0/examples/jsm/loaders
 import { STLExporter } from "https://esm.sh/three@0.180.0/examples/jsm/exporters/STLExporter.js";
 import { createSlicerClient } from "./vendor/three-slicer/engine/src/client.js?v=stats-only-time-v1";
 import { SLICER_PROFILES } from "./slicer-config.js";
-import { filamentGrams } from "./filament-math.mjs";
+import { filamentDensity, filamentGrams } from "./filament-math.mjs";
 import { slicerFilamentLength, slicerTimeSeconds } from "./slicer-result.mjs";
 
 let viewer;
@@ -135,7 +135,7 @@ export function createVirtualBoundingBoxModel(dimensions) {
   return { binaryStl:toBinaryStl(group), dimensions:{ x, y, z } };
 }
 
-export async function sliceModel(model, profileName, onProgress) {
+export async function sliceModel(model, profileName, onProgress, material = "PLA") {
   const process = SLICER_PROFILES[profileName];
   if (!process) throw new Error("Choose a valid print profile.");
   const client = createSlicerClient();
@@ -165,7 +165,7 @@ export async function sliceModel(model, profileName, onProgress) {
     if (result?.warnings?.includes("over_bed_model")) throw new Error("The model does not fit within the print area.");
     const filamentLengthMm = slicerFilamentLength(result);
     if (!filamentLengthMm) throw new Error("The slicer found no printable material. Check that the model is solid, has a usable scale, and is not thinner than the selected layer height.");
-    const materialGrams = filamentGrams(filamentLengthMm);
+    const materialGrams = filamentGrams(filamentLengthMm, undefined, filamentDensity(material));
     const seconds = slicerTimeSeconds(result, globalThis.MucciGcodeTime?.parse);
     if (!seconds) throw new Error("The slicer produced toolpaths but did not return a print-time estimate.");
     onProgress?.({ stage:"Estimate ready" });

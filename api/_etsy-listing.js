@@ -33,6 +33,7 @@ function buildDescription(estimate, finalPrice, physicalQuantity) {
     `- Quantity: ${physicalQuantity}`,
     estimate.material ? `- Material: ${estimate.material}` : "",
     estimate.colour_count ? `- Colours: ${estimate.colour_count}` : "",
+    estimate.desired_colours ? `- Wanted colours: ${estimate.desired_colours}` : "",
     estimate.design_level && estimate.design_level !== "none" ? `- 3D Design: ${titleCase(estimate.design_level)}` : "",
     `- Assembly: ${estimate.assembly_required ? "Required" : "Not required"}`
   ].filter(Boolean);

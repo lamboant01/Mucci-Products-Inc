@@ -31,7 +31,7 @@ test("quote form presents required service and dimensions without changing exist
     "Yes, ready to print", "Yes, but it needs modifications", "No, I need a 3D model created",
     "What do you need?", "3D Design Only", "3D Design + 3D Printing",
     "Maximum finished dimensions", "Length", "Width", "Height", "Choose unit",
-    "I approve splitting and assembly", "Wanted colours",
+    "I approve splitting and assembly", "Material and colours", "PLA", "PETG", "Wanted colours",
     "closest available filament match based on current market availability"
   ]) assert.match(html, new RegExp(phrase.replace(/[+]/g, "\\+")));
   assert.match(html, /name="service_intent" value="DESIGN_ONLY"/);
@@ -48,6 +48,8 @@ test("customer estimator separates design, preliminary printing, and total prici
   assert.match(source, /p_split_and_assembly_accepted/);
   assert.match(source, /desired_colours\.required = includesPhysicalPrinting/);
   assert.match(source, /p_desired_colours/);
+  assert.match(source, /p_material: physicalPrinting/);
+  assert.match(source, /sliceModel\(loadedModel, printProfile, slicingProgress, selected\("material"\)\)/);
   assert.match(source, /\["ready", "modify"\]\.includes\(fileStatus\)/);
   assert.match(source, /sliceModel\(loadedModel, printProfile/);
   assert.match(source, /Physical 3D Printing/);
@@ -67,6 +69,7 @@ test("database migration stores separate service pricing and preserves quantity 
   assert.match(sql, /virtual_bounding_box/);
   assert.match(sql, /greatest\(p_model_length_mm,p_model_width_mm,p_model_height_mm\) > 250[\s\S]*p_split_and_assembly_accepted/i);
   assert.match(sql, /Enter the wanted colours using 200 characters or fewer/);
+  assert.match(sql, /Choose PLA or PETG for printing/);
 });
 
 test("email and admin review show separated estimate components", () => {
