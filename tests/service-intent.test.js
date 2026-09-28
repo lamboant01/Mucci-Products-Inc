@@ -72,6 +72,13 @@ test("database migration stores separate service pricing and preserves quantity 
   assert.match(sql, /Choose PLA or PETG for printing/);
 });
 
+test("follow-up migration upgrades an already-applied estimator schema", () => {
+  const sql = read("supabase", "migrations", "018_estimator_material_and_oversized_upgrade.sql");
+  assert.match(sql, /create or replace function public\.calculate_service_estimate\([\s\S]*p_material text/);
+  assert.match(sql, /create or replace function public\.submit_service_estimate\([\s\S]*p_desired_colours text/);
+  assert.match(sql, /notify pgrst, 'reload schema'/);
+});
+
 test("email and admin review show separated estimate components", () => {
   const email = read("api", "_estimate-email.js");
   const admin = read("admin", "estimates", "estimates.js");

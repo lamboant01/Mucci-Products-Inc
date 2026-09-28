@@ -51,7 +51,7 @@ on the pinned Three.js and OCCT browser modules. The AGPL Three Slicer engine,
 its licence, and its third-party notices are kept under
 `estimator/vendor/three-slicer/` so the worker does not depend on a remote path.
 
-Run migrations 004 through 017 in order after migrations 001 through 003. All
+Run migrations 004 through 018 in order after migrations 001 through 003. All
 private pricing values and fallback-time assumptions are centralized in
 the single-row `print_estimator_config` table created by that migration. Update
 that row in Supabase to change pricing without editing the public website.
@@ -118,6 +118,10 @@ submitted dimension, oversized-part acceptance/section count, and separate
 design/printing/total price fields. It keeps
 the legacy estimator RPCs available for compatibility while new form
 submissions use the component-based calculation and submission RPCs.
+Migration `018_estimator_material_and_oversized_upgrade.sql` upgrades databases
+where an earlier version of migration 017 was already applied, installs the
+current PLA/PETG and oversized-part RPC signatures, and refreshes the PostgREST
+schema cache.
 
 The protected admin area is available at `/admin` after Google sign-in and now
 includes Dashboard, Requests / Estimates, Orders / Projects, Customers,
