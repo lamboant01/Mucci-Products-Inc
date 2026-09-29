@@ -4,10 +4,12 @@ import { STLLoader } from "https://esm.sh/three@0.180.0/examples/jsm/loaders/STL
 import { OBJLoader } from "https://esm.sh/three@0.180.0/examples/jsm/loaders/OBJLoader.js";
 import { ThreeMFLoader } from "https://esm.sh/three@0.180.0/examples/jsm/loaders/3MFLoader.js";
 import { STLExporter } from "https://esm.sh/three@0.180.0/examples/jsm/exporters/STLExporter.js";
+import { loadModel as loadUnifiedModel } from "https://esm.sh/three-slicer@0.3.2/viewer/loaders";
 import { createSlicerClient } from "./vendor/three-slicer/engine/src/client.js?v=stats-only-time-v1";
 import { SLICER_PROFILES } from "./slicer-config.js?v=mobile-large-parts-v2";
 import { filamentDensity, filamentGrams } from "./filament-math.mjs?v=mobile-large-parts-v2";
 import { slicerFilamentLength, slicerTimeSeconds } from "./slicer-result.mjs?v=mobile-large-parts-v2";
+import { packPrintBeds } from "./bed-packing.mjs?v=a1-auto-beds-v1";
 
 let viewer;
 let currentGroup;
@@ -100,6 +102,57 @@ function toBinaryStl(group) {
   throw new Error("The model could not be converted for slicing.");
 }
 
+function triangleBounds(triangles) {
+  const bounds = { minX:Infinity, minY:Infinity, minZ:Infinity, maxX:-Infinity, maxY:-Infinity, maxZ:-Infinity };
+  for (let index = 0; index < triangles.length; index += 3) {
+    bounds.minX = Math.min(bounds.minX, triangles[index]); bounds.maxX = Math.max(bounds.maxX, triangles[index]);
+    bounds.minY = Math.min(bounds.minY, triangles[index + 1]); bounds.maxY = Math.max(bounds.maxY, triangles[index + 1]);
+    bounds.minZ = Math.min(bounds.minZ, triangles[index + 2]); bounds.maxZ = Math.max(bounds.maxZ, triangles[index + 2]);
+  }
+  return bounds;
+}
+
+function plateStl(placements) {
+  const group = new THREE.Group();
+  for (const placement of placements) {
+    const { triangles, bounds } = placement.item;
+    const positioned = new Float32Array(triangles.length);
+    for (let index = 0; index < triangles.length; index += 3) {
+      const localX = triangles[index] - bounds.minX;
+      const localY = triangles[index + 1] - bounds.minY;
+      positioned[index] = placement.x + (placement.rotated ? localY : localX);
+      positioned[index + 1] = placement.y + (placement.rotated ? placement.item.width - localX : localY);
+      positioned[index + 2] = triangles[index + 2] - bounds.minZ;
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positioned, 3));
+    geometry.computeVertexNormals();
+    group.add(new THREE.Mesh(geometry, meshMaterial()));
+  }
+  normalizeGroup(group);
+  const size = new THREE.Box3().setFromObject(group).getSize(new THREE.Vector3());
+  return { binaryStl:toBinaryStl(group), dimensions:{ x:size.x, y:size.y, z:size.z } };
+}
+
+async function projectAnalysisBeds(file) {
+  const buffer = await file.arrayBuffer();
+  const objects = await loadUnifiedModel(file.name, buffer);
+  const printable = objects.filter((object) => object?.modelPos?.length >= 9).map((object, index) => {
+    const triangles = object.modelPos;
+    const bounds = triangleBounds(triangles);
+    return {
+      name:object.name || `${file.name} object ${index + 1}`, triangles, bounds,
+      width:bounds.maxX - bounds.minX, depth:bounds.maxY - bounds.minY, height:bounds.maxZ - bounds.minZ
+    };
+  });
+  if (!printable.length) throw new Error("The 3MF project does not contain printable objects.");
+  const plates = packPrintBeds(printable, { bedWidth:250, bedDepth:250, bedHeight:250, spacing:4, maximumBeds:64 });
+  const largest = printable.reduce((current, item) => ({
+    x:Math.max(current.x, item.width), y:Math.max(current.y, item.depth), z:Math.max(current.z, item.height)
+  }), { x:0, y:0, z:0 });
+  return { analysisBeds:plates.map((plate) => plateStl(plate.placements)), objectCount:printable.length, plateCount:plates.length, dimensions:largest };
+}
+
 function fitViewer(group) {
   const { scene, camera, controls } = viewer;
   if (currentGroup) scene.remove(currentGroup);
@@ -122,13 +175,15 @@ export async function loadAndPreviewModel(file, container) {
   const loaded = await loadModelForSlicing(file);
   const group = loaded.group;
   fitViewer(group);
-  return { binaryStl:loaded.binaryStl, dimensions:loaded.dimensions };
+  return loaded;
 }
 
 export async function loadModelForSlicing(file) {
   const group = normalizeGroup(await parseModel(file));
+  if (file.name.split(".").pop().toLowerCase() === "3mf") return { group, ...(await projectAnalysisBeds(file)) };
   const dimensions = new THREE.Box3().setFromObject(group).getSize(new THREE.Vector3());
-  return { group, binaryStl:toBinaryStl(group), dimensions:{ x:dimensions.x, y:dimensions.y, z:dimensions.z } };
+  const analysisBed = { binaryStl:toBinaryStl(group), dimensions:{ x:dimensions.x, y:dimensions.y, z:dimensions.z } };
+  return { group, binaryStl:analysisBed.binaryStl, analysisBeds:[analysisBed], plateCount:1, objectCount:1, dimensions:analysisBed.dimensions };
 }
 
 export function createVirtualBoundingBoxModel(dimensions) {

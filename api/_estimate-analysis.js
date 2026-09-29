@@ -7,6 +7,7 @@ const PATH_PATTERN = /^([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 const MAX_ANALYSIS_BYTES = 60 * 1024 * 1024;
 const MAX_FILES = 8;
+const MAX_ANALYSIS_PLATES = 64;
 
 function configuration() {
   const values = {
@@ -130,34 +131,42 @@ async function analyze(config, rawRequest) {
   const analyses = [];
   let root = "";
   let manualReview = false;
+  let analysisPlateCount = 0;
   try {
     for (const input of inputs) {
       const original = input.path ? storagePath(input.path) : null;
-      const analysis = storagePath(input.analysisPath, "stl");
-      root ||= analysis.root;
-      if (analysis.root !== root || (original && original.root !== root)) throw new Error("All model files must belong to one private quote upload.");
+      const requestedAnalysisPaths = Array.isArray(input.analysisPaths) && input.analysisPaths.length ? input.analysisPaths : [input.analysisPath];
+      if (new Set(requestedAnalysisPaths).size !== requestedAnalysisPaths.length) throw new Error("Duplicate print-bed analysis path.");
+      analysisPlateCount += requestedAnalysisPaths.length;
+      if (analysisPlateCount > MAX_ANALYSIS_PLATES) throw new Error(`A project cannot exceed ${MAX_ANALYSIS_PLATES} automatically arranged print beds.`);
+      const analysisFiles = requestedAnalysisPaths.map((path) => storagePath(path, "stl"));
+      root ||= analysisFiles[0].root;
+      if (analysisFiles.some((analysis) => analysis.root !== root) || (original && original.root !== root)) throw new Error("All model files must belong to one private quote upload.");
       const quantity = Number(input.quantity || 1);
       if (!Number.isInteger(quantity) || quantity < 1 || quantity > 999) throw new Error("Each model quantity must be between 1 and 999.");
-      let platesPerProject = 1;
+      const platesPerProject = analysisFiles.length;
       if (original) {
         const originalBytes = await privateFile(config, original.path, MAX_FILE_BYTES);
-        if (request.uploadMode === "project") {
-          platesPerProject = projectPlateCount(originalBytes);
-          if (platesPerProject > 1) manualReview = true;
-        }
+        if (!originalBytes.length) throw new Error("The original model file is empty.");
       }
-      const stl = await privateFile(config, analysis.path, MAX_ANALYSIS_BYTES);
-      const sliced = sliceForStatistics(slicer, stl, profile, input.name);
-      const seconds = Number(sliced?.stats?.time_estimate);
-      const filamentMm = Number(sliced?.stats?.filament_mm);
-      if (!Number.isFinite(seconds) || seconds <= 0 || !Number.isFinite(filamentMm) || filamentMm <= 0) throw new Error(`${input.name || "A model"} could not be analyzed reliably.`);
+      let seconds = 0, filamentMm = 0, longestSeconds = 0;
+      for (let plateIndex = 0; plateIndex < analysisFiles.length; plateIndex += 1) {
+        const stl = await privateFile(config, analysisFiles[plateIndex].path, MAX_ANALYSIS_BYTES);
+        const sliced = sliceForStatistics(slicer, stl, profile, `${input.name || "Model"} bed ${plateIndex + 1}`);
+        const plateSeconds = Number(sliced?.stats?.time_estimate);
+        const plateFilamentMm = Number(sliced?.stats?.filament_mm);
+        if (!Number.isFinite(plateSeconds) || plateSeconds <= 0 || !Number.isFinite(plateFilamentMm) || plateFilamentMm <= 0) throw new Error(`${input.name || "A model"} could not be analyzed reliably.`);
+        seconds += plateSeconds;
+        filamentMm += plateFilamentMm;
+        longestSeconds = Math.max(longestSeconds, plateSeconds);
+      }
       const hours = seconds / 3600;
       const grams = gramsFromLength(filamentMm, density);
       analyses.push({
-        path:original?.path || null, analysis_path:analysis.path, name:String(input.name || "Model").slice(0, 255),
+        path:original?.path || null, analysis_path:analysisFiles[0].path, analysis_paths:analysisFiles.map((analysis) => analysis.path), name:String(input.name || "Model").slice(0, 255),
         size_bytes:Number(input.sizeBytes || 0), quantity, hours:Number(hours.toFixed(4)), grams:Number(grams.toFixed(3)),
-        plate_count:platesPerProject, max_single_plate_hours:platesPerProject === 1 ? Number(hours.toFixed(4)) : null,
-        analysis_status:platesPerProject > 1 ? "manual_plate_confirmation" : "ready"
+        plate_count:platesPerProject, max_single_plate_hours:Number((longestSeconds / 3600).toFixed(4)),
+        analysis_status:"ready"
       });
     }
   } finally {

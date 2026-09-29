@@ -37,3 +37,11 @@ test("server analysis streams layers and converts WASM aborts into a safe error"
     /too complex for automatic slicing/
   );
 });
+
+test("server analysis supports several generated bed paths for one 3MF project", () => {
+  const source = require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "api", "_estimate-analysis.js"), "utf8");
+  assert.match(source, /input\.analysisPaths/);
+  assert.match(source, /Duplicate print-bed analysis path/);
+  assert.match(source, /analysis_paths:analysisFiles\.map/);
+  assert.match(source, /max_single_plate_hours:Number/);
+});

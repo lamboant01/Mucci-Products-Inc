@@ -1,4 +1,4 @@
-import { createVirtualBoundingBoxModel, loadAndPreviewModel, loadModelForSlicing } from "./model-slicer.js?v=multi-file-v1";
+import { createVirtualBoundingBoxModel, loadAndPreviewModel, loadModelForSlicing } from "./model-slicer.js?v=a1-auto-beds-v1";
 import { MAX_MODEL_FILES, removeUpload, validateUploadSelection } from "./multi-file.mjs?v=multi-file-v1";
 import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrintSplitting, resolveServiceIntent, serviceLabel, splitDimensionsForPrint, unitMaximum } from "./service-intent.mjs?v=multi-file-v1";
 
@@ -138,7 +138,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
     const mode = uploadMode();
     const incoming = validateUploadSelection(files, mode, maxFileBytes);
     if (mode === "individual" && modelItems.length + incoming.length > MAX_MODEL_FILES) throw validationError(`Choose no more than ${MAX_MODEL_FILES} individual model files.`);
-    const additions = incoming.map((file) => ({ id:crypto.randomUUID(), file, extension:file.name.split(".").pop().toLowerCase(), quantity:1, status:"Preparing…", loaded:null, path:null, analysisPath:null }));
+    const additions = incoming.map((file) => ({ id:crypto.randomUUID(), file, extension:file.name.split(".").pop().toLowerCase(), quantity:1, status:"Preparing…", loaded:null, path:null, analysisPath:null, analysisPaths:[] }));
     modelItems = mode === "project" ? additions : [...modelItems, ...additions];
     renderModelFiles();
     document.querySelector("#model-upload-status").textContent = "Preparing model analysis…";
@@ -147,7 +147,9 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
         item.loaded = modelItems[0] === item ? await loadAndPreviewModel(item.file, document.querySelector("#model-viewer")) : await loadModelForSlicing(item.file);
         const { x, y, z } = item.loaded.dimensions;
         if (mode === "individual" && Math.max(x, y, z) > maxModelDimensionMm) throw validationError(`${item.file.name} must fit within 250 × 250 × 250 mm.`);
-        item.status = `${x.toFixed(1)} × ${y.toFixed(1)} × ${z.toFixed(1)} mm · Ready`;
+        item.status = mode === "project"
+          ? `${item.loaded.objectCount} project group${item.loaded.objectCount === 1 ? "" : "s"} · ${item.loaded.plateCount} auto-arranged A1 bed${item.loaded.plateCount === 1 ? "" : "s"} · largest ${x.toFixed(1)} × ${y.toFixed(1)} × ${z.toFixed(1)} mm · Ready`
+          : `${x.toFixed(1)} × ${y.toFixed(1)} × ${z.toFixed(1)} mm · Ready`;
       } catch (error) { item.status = error.message || "Analysis failed"; item.loaded = null; }
       renderModelFiles();
     }
@@ -185,9 +187,19 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
   async function ensureModelUploads(items, status) {
     for (const item of items) {
       if (!item.path) { status.textContent = `Uploading ${item.file.name}…`; item.path = `${uploadRoot}/${crypto.randomUUID()}.${item.extension}`; await uploadFile(item.path, item.file); }
-      if (!item.analysisPath) {
-        if (item.extension === "stl") item.analysisPath = item.path;
-        else { status.textContent = `Preparing secure analysis for ${item.file.name}…`; item.analysisPath = `${uploadRoot}/${crypto.randomUUID()}.stl`; await uploadFile(item.analysisPath, new Blob([item.loaded.binaryStl], { type:"model/stl" }), "model/stl"); }
+      if (!item.analysisPaths.length) {
+        if (item.extension === "stl") item.analysisPaths = [item.path];
+        else {
+          status.textContent = `Preparing ${item.loaded.analysisBeds.length} A1 print bed${item.loaded.analysisBeds.length === 1 ? "" : "s"} for ${item.file.name}…`;
+          const uploadedPaths = [];
+          for (const bed of item.loaded.analysisBeds) {
+            const path = `${uploadRoot}/${crypto.randomUUID()}.stl`;
+            await uploadFile(path, new Blob([bed.binaryStl], { type:"model/stl" }), "model/stl");
+            uploadedPaths.push(path);
+          }
+          item.analysisPaths = uploadedPaths;
+        }
+        item.analysisPath = item.analysisPaths[0];
       }
     }
   }
@@ -212,7 +224,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
       submittedLength:dimensions ? Number(values.dimension_length) : null, submittedWidth:dimensions ? Number(values.dimension_width) : null,
       submittedHeight:dimensions ? Number(values.dimension_height) : null, dimensionUnit:dimensions ? values.dimension_unit : null,
       shipping:0,
-      modelFiles:modelItems.map((item) => ({ path:item.path, analysisPath:item.analysisPath, name:item.file.name, sizeBytes:item.file.size, quantity:item.quantity }))
+      modelFiles:modelItems.map((item) => ({ path:item.path, analysisPath:item.analysisPath, analysisPaths:item.analysisPaths, name:item.file.name, sizeBytes:item.file.size, quantity:item.quantity }))
     };
   }
 
