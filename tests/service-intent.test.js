@@ -61,7 +61,7 @@ test("customer estimator separates design, preliminary printing, and total prici
   assert.match(source, /referenceFiles/);
   assert.match(source, /modelFiles/);
   assert.match(source, /manufacturing_total/);
-  assert.match(source, /Shipping is added later/);
+  assert.match(source, /Shipping is calculated separately/);
 });
 
 test("multi-file migration installs server pricing and submission RPCs", () => {
