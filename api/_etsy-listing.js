@@ -29,12 +29,16 @@ function buildTitle(estimate) {
 }
 
 function buildDescription(estimate, finalPrice, physicalQuantity) {
+  const printSettings = Array.isArray(estimate.model_files) ? estimate.model_files.find((file) => file?.print_settings)?.print_settings : null;
   const details = [
     `- Quantity: ${physicalQuantity}`,
     estimate.material ? `- Material: ${estimate.material}` : "",
     estimate.colour_count ? `- Colours: ${estimate.colour_count}` : "",
     estimate.desired_colours ? `- Wanted colours: ${estimate.desired_colours}` : "",
     estimate.design_level && estimate.design_level !== "none" ? `- 3D Design: ${titleCase(estimate.design_level)}` : "",
+    printSettings ? `- Infill: ${Number(printSettings.infill_percent)}%` : "",
+    printSettings ? `- Wall loops: ${Number(printSettings.wall_loops)}` : "",
+    printSettings ? `- Infill pattern: ${titleCase(printSettings.infill_pattern)}` : "",
     `- Assembly: ${estimate.assembly_required ? "Required" : "Not required"}`
   ].filter(Boolean);
   return [`Custom 3D printing project for quote ${estimate.quote_code}.`, "", "Project includes:", ...details, "", `Final agreed project price: ${cad(finalPrice)}.`, "", `This private listing corresponds to the specifications discussed through Etsy Messages and Mucci Products quote ${estimate.quote_code}.`, "", "Production begins after purchase and final confirmation."].join("\n");

@@ -25,12 +25,12 @@ test("distinguishes a model with no printable material", async () => {
   assert.equal(slicerTimeSeconds(result), null);
 });
 
-test("server analysis streams layers and converts WASM aborts into a safe error", () => {
+test("server analysis keeps full timing enabled and converts WASM aborts into a safe error", () => {
   let options;
   const result = analysis.sliceForStatistics({
     slice(_stl, _profile, received) { options = received; return { stats:{ time_estimate:60, filament_mm:100 } }; }
   }, new Uint8Array([1]), {}, "large.3mf");
-  assert.equal(typeof options.onLayer, "function");
+  assert.equal(options, undefined);
   assert.equal(result.stats.time_estimate, 60);
   assert.throws(
     () => analysis.sliceForStatistics({ slice() { throw new Error("Aborted(). Build with -sASSERTIONS for more info."); } }, new Uint8Array([1]), {}, "49-parts.3mf"),
@@ -51,4 +51,28 @@ test("server analysis supports several generated bed paths for one 3MF project",
   assert.match(source, /Duplicate print-bed analysis path/);
   assert.match(source, /analysis_paths:analysisFiles\.map/);
   assert.match(source, /max_single_plate_hours:splitAnalysis \? null : Number/);
+});
+
+test("advanced print settings preserve defaults until explicitly enabled", () => {
+  const base = { infill_density:0.30, wall_loops:3, sparse_infill_pattern:"grid", layer_height:0.20 };
+  const resolved = analysis.resolvePrintSettings({ advancedSettings:{ enabled:false, infillPercent:99, wallLoops:19, infillPattern:"gyroid" } }, base);
+  assert.deepEqual(resolved.settings, { custom:false, infill_percent:30, wall_loops:3, infill_pattern:"grid" });
+  assert.deepEqual(resolved.profile, base);
+});
+
+test("advanced print settings alter the authoritative server slicer profile", () => {
+  const base = { infill_density:0.30, wall_loops:3, sparse_infill_pattern:"grid", layer_height:0.20 };
+  const resolved = analysis.resolvePrintSettings({ advancedSettings:{ enabled:true, infillPercent:55, wallLoops:5, infillPattern:"gyroid" } }, base);
+  assert.deepEqual(resolved.settings, { custom:true, infill_percent:55, wall_loops:5, infill_pattern:"gyroid" });
+  assert.equal(resolved.profile.infill_density, 0.55);
+  assert.equal(resolved.profile.wall_loops, 5);
+  assert.equal(resolved.profile.sparse_infill_pattern, "gyroid");
+  assert.equal(base.infill_density, 0.30);
+});
+
+test("advanced print settings reject unsafe or unsupported values", () => {
+  const base = { infill_density:0.30, wall_loops:3, sparse_infill_pattern:"grid" };
+  assert.throws(() => analysis.resolvePrintSettings({ advancedSettings:{ enabled:true, infillPercent:0, wallLoops:3, infillPattern:"grid" } }, base), /1 to 100/);
+  assert.throws(() => analysis.resolvePrintSettings({ advancedSettings:{ enabled:true, infillPercent:30, wallLoops:1, infillPattern:"grid" } }, base), /2 to 20/);
+  assert.throws(() => analysis.resolvePrintSettings({ advancedSettings:{ enabled:true, infillPercent:30, wallLoops:3, infillPattern:"honeycomb" } }, base), /Grid, Gyroid, or Triangles/);
 });

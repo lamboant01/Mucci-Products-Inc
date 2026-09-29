@@ -39,7 +39,8 @@ test("sends one protected estimate summary to the owner", { concurrency:false },
       colour_count:"2", desired_colours:"Navy blue", material:"PETG", design_level:"none", assembly_required:false, notes:"Blue",
       estimated_material_grams:11, estimated_price:15.2, estimated_price_max:15.2,
       requires_manual_review:false, print_profile:"standard", purge_waste_percent:10,
-      filament_grams_per_item:10, email_notification_sent_at:null
+      filament_grams_per_item:10, email_notification_sent_at:null,
+      model_files:[{ name:"bracket.stl", print_settings:{ custom:true, infill_percent:35, wall_loops:4, infill_pattern:"triangles" } }]
     }]), { status:200, headers:{ "Content-Type":"application/json" } });
   };
 
@@ -63,6 +64,9 @@ test("sends one protected estimate summary to the owner", { concurrency:false },
   assert.match(payload.text, /Wanted colours: Navy blue/);
   assert.match(payload.text, /Material: PETG/);
   assert.match(payload.text, /Reference images: 1 attached/);
+  assert.match(payload.text, /Infill: 35%/);
+  assert.match(payload.text, /Wall loops: 4/);
+  assert.match(payload.text, /Infill pattern: Triangles/);
   assert.equal(payload.attachments, undefined);
   assert.equal(emailCall.init.headers["Idempotency-Key"], "estimate-submitted/MP-A42K7");
 });

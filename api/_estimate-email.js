@@ -42,6 +42,16 @@ function number(value, digits = 1) {
   return value == null || !Number.isFinite(Number(value)) ? "Not available" : Number(value).toFixed(digits);
 }
 
+function printSettings(estimate) {
+  const settings = Array.isArray(estimate.model_files) ? estimate.model_files.find((file) => file?.print_settings)?.print_settings : null;
+  if (!settings) return null;
+  return {
+    infill:`${Number(settings.infill_percent)}%`,
+    walls:String(Number(settings.wall_loops)),
+    pattern:label(settings.infill_pattern)
+  };
+}
+
 function estimateRows(estimate) {
   const intent = text(estimate.service_intent || ({ ready:"PRINT_ONLY", modify:"MODIFY_AND_PRINT", design:"DESIGN_AND_PRINT" })[estimate.file_status]);
   const service = label(intent);
@@ -56,6 +66,7 @@ function estimateRows(estimate) {
     : `${Number(estimate.print_hours_per_item || 0)}h ${Number(estimate.print_minutes_per_item || 0)}m per item`;
   const dimensions = [estimate.submitted_length, estimate.submitted_width, estimate.submitted_height].every((value) => Number(value) > 0)
     ? `${estimate.submitted_length} × ${estimate.submitted_width} × ${estimate.submitted_height} ${estimate.dimension_unit}` : "Not provided";
+  const settings = printSettings(estimate);
   const rows = [
     ["Quote code", text(estimate.quote_code, 20)],
     ["Service selected", service],
@@ -74,6 +85,7 @@ function estimateRows(estimate) {
     ["Quantity", String(Number(estimate.quantity || 0))],
     ["Material", text(estimate.material, 12) || "Not provided"],
     ["Print profile", label(estimate.print_profile)],
+    ...(settings ? [["Infill", settings.infill], ["Wall loops", settings.walls], ["Infill pattern", settings.pattern]] : []),
     ["Print time", printTime],
     ["Filament", estimate.filament_grams_per_item == null ? "Not available" : `${number(estimate.filament_grams_per_item)} g per item`],
     ["Material total", estimate.estimated_material_grams == null ? "Not available" : `${number(estimate.estimated_material_grams)} g including purge`],

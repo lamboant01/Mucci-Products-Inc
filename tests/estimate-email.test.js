@@ -9,7 +9,8 @@ const estimate = {
   notes:"Blue & strong", estimated_material_grams:22, estimated_price:72.4,
   reference_files:[{ path:"submission/references/one.jpg", name:"front.jpg" }],
   estimated_price_max:72.4, requires_manual_review:false, print_time_source:"slicer",
-  print_profile:"standard", purge_waste_percent:10, filament_grams_per_item:10
+  print_profile:"standard", purge_waste_percent:10, filament_grams_per_item:10,
+  model_files:[{ name:"bracket.stl", print_settings:{ custom:true, infill_percent:45, wall_loops:4, infill_pattern:"gyroid" } }]
 };
 
 test("builds an easy-to-read owner estimate email without leaking the private route", () => {
@@ -24,6 +25,9 @@ test("builds an easy-to-read owner estimate email without leaking the private ro
   assert.match(built.text, /Reference images: 1 attached/);
   assert.match(built.text, /Blue & strong/);
   assert.match(built.text, /Print profile: Standard Detail/);
+  assert.match(built.text, /Infill: 45%/);
+  assert.match(built.text, /Wall loops: 4/);
+  assert.match(built.text, /Infill pattern: Gyroid/);
   assert.equal(built.portalUrl, undefined);
   assert.doesNotMatch(built.text, /https?:\/\/|\/admin|card-dashboard/i);
   assert.match(built.text, /search for quote MP-A42K7/i);

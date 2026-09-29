@@ -8,6 +8,7 @@ const MAX_FILE_BYTES = 25 * 1024 * 1024;
 const MAX_ANALYSIS_BYTES = 60 * 1024 * 1024;
 const MAX_FILES = 8;
 const MAX_ANALYSIS_PLATES = 64;
+const INFILL_PATTERNS = new Set(["grid", "gyroid", "triangles"]);
 
 function configuration() {
   const values = {
@@ -97,15 +98,38 @@ function gramsFromLength(lengthMm, density) {
   return Math.PI * radiusCm * radiusCm * (Number(lengthMm) / 10) * density;
 }
 
+function resolvePrintSettings(request, baseProfile) {
+  const custom = request?.advancedSettings?.enabled === true;
+  if (!custom) return {
+    profile:{ ...baseProfile },
+    settings:{
+      custom:false,
+      infill_percent:Math.round(Number(baseProfile.infill_density) * 100),
+      wall_loops:Number(baseProfile.wall_loops),
+      infill_pattern:String(baseProfile.sparse_infill_pattern)
+    }
+  };
+  const infillPercent = Number(request.advancedSettings.infillPercent);
+  const wallLoops = Number(request.advancedSettings.wallLoops);
+  const infillPattern = String(request.advancedSettings.infillPattern || "").toLowerCase();
+  if (!Number.isInteger(infillPercent) || infillPercent < 1 || infillPercent > 100) throw new Error("Infill must be a whole number from 1 to 100 percent.");
+  if (!Number.isInteger(wallLoops) || wallLoops < 2 || wallLoops > 20) throw new Error("Wall loops must be a whole number from 2 to 20.");
+  if (!INFILL_PATTERNS.has(infillPattern)) throw new Error("Choose Grid, Gyroid, or Triangles for the infill pattern.");
+  return {
+    profile:{ ...baseProfile, infill_density:infillPercent / 100, wall_loops:wallLoops, sparse_infill_pattern:infillPattern },
+    settings:{ custom:true, infill_percent:infillPercent, wall_loops:wallLoops, infill_pattern:infillPattern }
+  };
+}
+
 function sliceForStatistics(slicer, stl, profile, name, options = {}) {
   try {
-    // Quotes only need aggregate time and filament statistics. Discard each
-    // streamed layer so large multi-part projects do not retain the complete
-    // G-code and toolpath payload in server memory.
-    const result = slicer.slice(stl, profile, { onLayer:() => {} });
+    // The slicer's full print-time engine is disabled when a layer sink is
+    // registered. Run the batch calculation so multi-bed projects retain
+    // valid time estimates, then keep only its aggregate statistics below.
+    const result = slicer.slice(stl, profile);
     if (result?.error) throw new Error(result.error);
     if (result?.warnings?.includes("over_bed_model") && !options.allowOverBed) throw new Error(`${name || "This model"} does not fit within the print area.`);
-    return result;
+    return { stats:result?.stats, warnings:result?.warnings || [] };
   } catch (error) {
     const detail = String(error?.message || error || "");
     if (/aborted|memory|out of bounds|allocation/i.test(detail)) {
@@ -124,8 +148,9 @@ async function analyze(config, rawRequest) {
   if (!Array.isArray(inputs) || !inputs.length) throw new Error("No printable analysis geometry was supplied.");
   const { createSlicer } = await import("three-slicer");
   const { SLICER_PROFILES } = await import("../estimator/slicer-config.js");
-  const profile = SLICER_PROFILES[String(request.printProfile || "")];
-  if (!profile) throw new Error("Choose a valid print profile.");
+  const baseProfile = SLICER_PROFILES[String(request.printProfile || "")];
+  if (!baseProfile) throw new Error("Choose a valid print profile.");
+  const { profile, settings:printSettings } = resolvePrintSettings(request, baseProfile);
   const density = materialDensity(request.material);
   const slicer = await createSlicer();
   const analyses = [];
@@ -173,7 +198,7 @@ async function analyze(config, rawRequest) {
         path:original?.path || null, analysis_path:analysisFiles[0].path, analysis_paths:analysisFiles.map((analysis) => analysis.path), name:String(input.name || "Model").slice(0, 255),
         size_bytes:Number(input.sizeBytes || 0), quantity, hours:Number(hours.toFixed(4)), grams:Number(grams.toFixed(3)),
         plate_count:platesPerProject, max_single_plate_hours:splitAnalysis ? null : Number((longestSeconds / 3600).toFixed(4)),
-        analysis_status:splitAnalysis ? "manual_cut_plan" : "ready"
+        analysis_status:splitAnalysis ? "manual_cut_plan" : "ready", print_settings:printSettings
       });
     }
   } finally {
@@ -211,4 +236,4 @@ async function price(config, request, analysis) {
   return Array.isArray(rows) ? rows[0] : rows;
 }
 
-module.exports = { analyze, configuration, price, projectPlateCount, requestBody, sign, sliceForStatistics, storagePath, validateRequest, verify };
+module.exports = { analyze, configuration, price, projectPlateCount, requestBody, resolvePrintSettings, sign, sliceForStatistics, storagePath, validateRequest, verify };

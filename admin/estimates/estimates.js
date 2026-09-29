@@ -148,6 +148,7 @@
   }
 
   function estimateDetailsMarkup(estimate) {
+    const printSettings = Array.isArray(estimate.model_files) ? estimate.model_files.find((file) => file?.print_settings)?.print_settings : null;
     const submittedDimensions = [estimate.submitted_length, estimate.submitted_width, estimate.submitted_height].every((value) => Number(value) > 0)
       ? `${Number(estimate.submitted_length)} × ${Number(estimate.submitted_width)} × ${Number(estimate.submitted_height)} ${estimate.dimension_unit}` : "";
     const dimensions = submittedDimensions || ([estimate.model_width_mm, estimate.model_depth_mm, estimate.model_height_mm].every((value) => Number(value) > 0)
@@ -171,7 +172,9 @@
       ["Quantity", estimate.quantity], ["Size category", label(estimate.size_category)], ["Material", estimate.material || "PLA"],
       ["Colours", estimate.colour_count], ["Wanted colours", estimate.desired_colours || "Not provided"],
       ["Assembly", estimate.assembly_required ? "Required" : "Not required"],
-      ["Production time", time], ["Print profile", label(estimate.print_profile)], ["Filament per item", estimate.filament_grams_per_item == null ? "Not available" : `${Number(estimate.filament_grams_per_item).toFixed(1)} g`],
+      ["Production time", time], ["Print profile", label(estimate.print_profile)],
+      ...(printSettings ? [["Infill", `${Number(printSettings.infill_percent)}%`], ["Wall loops", Number(printSettings.wall_loops)], ["Infill pattern", label(printSettings.infill_pattern)]] : []),
+      ["Filament per item", estimate.filament_grams_per_item == null ? "Not available" : `${Number(estimate.filament_grams_per_item).toFixed(1)} g`],
       ["Total material", estimate.estimated_material_grams == null ? "Not available" : `${Number(estimate.estimated_material_grams).toFixed(1)} g including purge`],
       ["Purge allowance", `${Number(estimate.purge_waste_percent || 0)}%`]
     );

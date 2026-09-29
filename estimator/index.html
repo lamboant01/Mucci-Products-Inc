@@ -110,6 +110,35 @@
               <label class="choice"><input required type="radio" name="print_profile" value="standard" checked /><span><b>Standard Detail</b><small>0.20 mm layers</small></span></label>
               <label class="choice"><input type="radio" name="print_profile" value="draft" /><span><b>Efficient Larger Prints</b><small>0.24 mm layers</small></span></label>
             </div>
+            <label class="advanced-settings-toggle" for="advanced-settings-enabled">
+              <span><b>Advanced print settings</b><small>Optional. Leave off to use the selected profile’s current slicing defaults.</small></span>
+              <input id="advanced-settings-enabled" type="checkbox" name="advanced_settings_enabled" value="true" role="switch" aria-controls="advanced-settings-panel" aria-expanded="false" />
+            </label>
+            <div id="advanced-settings-panel" class="advanced-settings-panel hidden">
+              <div class="advanced-settings-fields">
+                <label class="field">Infill percentage
+                  <input type="number" name="infill_percent" value="30" min="1" max="100" step="1" inputmode="numeric" disabled />
+                  <small>1–100%. Higher infill generally adds material, print time, weight, and strength.</small>
+                </label>
+                <label class="field">Wall loops
+                  <input type="number" name="wall_loops" value="3" min="2" max="20" step="1" inputmode="numeric" disabled />
+                  <small>Minimum 2. More walls generally improve shell strength but increase time and material.</small>
+                </label>
+                <label class="field">Infill pattern
+                  <select name="infill_pattern" disabled>
+                    <option value="grid" selected>Grid — speed and value</option>
+                    <option value="gyroid">Gyroid — multi-direction loading</option>
+                    <option value="triangles">Triangles — stiffness</option>
+                  </select>
+                  <small>Performance still depends on part geometry, print orientation, material, and loading.</small>
+                </label>
+              </div>
+              <div class="pattern-guidance" aria-label="Infill pattern guidance">
+                <p><b>Grid:</b> a fast, cost-effective general-purpose choice.</p>
+                <p><b>Gyroid:</b> supports loads and energy absorption more evenly across multiple directions.</p>
+                <p><b>Triangles:</b> favours rigidity and stiffness, usually with more material and print time.</p>
+              </div>
+            </div>
             <p id="slice-status" class="import-status" role="status"></p>
           </fieldset>
 
@@ -182,6 +211,6 @@
     <script src="https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js"></script>
     <script src="/estimator/mobile-menu.js"></script>
     <script src="/estimator/gcode-time.js"></script>
-    <script type="module" src="/estimator/estimator.js?v=oversized-split-v1"></script>
+    <script type="module" src="/estimator/estimator.js?v=advanced-print-settings-v1"></script>
   </body>
 </html>

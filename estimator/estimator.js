@@ -65,6 +65,21 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
     document.querySelector("#design-options").innerHTML = options.map(([value, label, price], index) => `<label class="choice"><input ${index === 0 ? "checked" : ""} required type="radio" name="design_level" value="${value}"><span><b>${label}</b><small>${price}</small></span></label>`).join("");
   }
 
+  function updateAdvancedSettings() {
+    const toggle = form.elements.advanced_settings_enabled;
+    const panel = document.querySelector("#advanced-settings-panel");
+    const canCustomize = ["ready", "modify"].includes(selected("file_status"));
+    if (!canCustomize) toggle.checked = false;
+    toggle.disabled = !canCustomize;
+    const enabled = canCustomize && toggle.checked;
+    toggle.setAttribute("aria-expanded", String(enabled));
+    panel.classList.toggle("hidden", !enabled);
+    ["infill_percent", "wall_loops", "infill_pattern"].forEach((name) => {
+      form.elements[name].disabled = !enabled;
+      form.elements[name].required = enabled;
+    });
+  }
+
   function updateConditionalFields() {
     const fileStatus = selected("file_status");
     const usesModel = ["ready", "modify"].includes(fileStatus);
@@ -82,6 +97,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
     document.querySelector("#colour-section").classList.toggle("hidden", designOnly);
     document.querySelector("#assembly-section").classList.toggle("hidden", designOnly);
     form.querySelectorAll('[name="print_profile"]').forEach((input) => { input.disabled = noFile; input.required = !noFile; });
+    updateAdvancedSettings();
     form.querySelectorAll('[name="colour_count"], [name="material"], [name="assembly_required"]').forEach((input) => { input.disabled = designOnly; input.required = includesPhysicalPrinting(intent); });
     form.elements.desired_colours.disabled = designOnly;
     form.elements.desired_colours.required = includesPhysicalPrinting(intent);
@@ -234,10 +250,17 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
     const uploadedOversized = !dimensions && oversizedModelItems().length > 0;
     const splitAccepted = Boolean((splitPlan?.sectionCount > 1 || uploadedOversized) && values.split_and_assembly_accepted === "true");
     const quantity = ["ready", "modify"].includes(values.file_status) ? modelItems.reduce((sum, item) => sum + item.quantity, 0) : intent === SERVICE_INTENTS.DESIGN_ONLY ? 1 : Number(values.quantity);
+    const advancedSettingsEnabled = values.advanced_settings_enabled === "true";
     return {
       fileStatus:values.file_status, serviceIntent:intent,
       uploadMode:["ready", "modify"].includes(values.file_status) ? uploadMode() : intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? "virtual" : null,
       uploadRoot, quantity, printProfile:values.file_status === "design" ? "preliminary" : values.print_profile,
+      advancedSettings:advancedSettingsEnabled ? {
+        enabled:true,
+        infillPercent:Number(values.infill_percent),
+        wallLoops:Number(values.wall_loops),
+        infillPattern:values.infill_pattern
+      } : { enabled:false },
       material:physical ? values.material : null, colourCount:physical ? values.colour_count : "1",
       desiredColours:physical ? values.desired_colours.trim() : null, designLevel:values.design_level,
       assemblyRequired:physical && (values.assembly_required === "true" || splitAccepted), splitAccepted,
@@ -282,8 +305,6 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
     finally { button.disabled = false; }
   }
 
-  function timeLabel(hours) { const minutes = Math.round(Number(hours || 0) * 60); return `${Math.floor(minutes / 60)} h ${minutes % 60} min`; }
-
   function renderEstimate(estimate, analysis) {
     const intent = calculatedRequest.serviceIntent;
     const design = Number(estimate.design_fee || 0), assembly = Number(estimate.assembly_fee || 0), shipping = Number(estimate.shipping || 0);
@@ -292,7 +313,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
       ? `<div><dt>Shipping</dt><dd>${escapeHtml(money(shipping))} CAD</dd></div>`
       : '<p class="shipping-note">Shipping is calculated separately once the destination and package details are confirmed.</p>';
     result.classList.remove("hidden");
-    result.innerHTML = `<p class="eyebrow">Your estimate is ready</p><h2>Estimate breakdown</h2><dl class="quote-breakdown"><div><dt>Service</dt><dd>${escapeHtml(serviceLabel(intent))}</dd></div>${intent === SERVICE_INTENTS.DESIGN_ONLY ? "" : `<div><dt>Estimated print time</dt><dd>${escapeHtml(timeLabel(analysis.totalHours))}</dd></div><div><dt>Estimated material</dt><dd>~${escapeHtml(Math.round(Number(analysis.totalGrams)))} g</dd></div><div><dt>Manufacturing estimate</dt><dd>${escapeHtml(money(estimate.manufacturing_total))} CAD</dd></div>`}${design ? `<div><dt>Design</dt><dd>${escapeHtml(money(design))} CAD</dd></div>` : ""}${assembly ? `<div><dt>Assembly</dt><dd>${escapeHtml(money(assembly))} CAD</dd></div>` : ""}${shipping ? shippingDisplay : ""}<div class="quote-total"><dt>Estimated total</dt><dd>${escapeHtml(money(estimate.estimated_total_max))} CAD</dd></div></dl>${shipping ? "" : shippingDisplay}${projectWarning}${estimate.requires_manual_review ? '<p class="notice"><strong>Review required.</strong> Final pricing will be confirmed after project review.</p>' : ""}<section class="estimate-disclaimer" aria-labelledby="estimate-disclaimer-title"><h3 id="estimate-disclaimer-title">About this estimate</h3><p>This is an automated estimate based on the uploaded 3D files and selected options. Final pricing is confirmed after Mucci Products reviews the files for printability, sizing, material requirements and production setup. Changes to the files, quantity, material, colour or requested specifications may require a revised quote. Shipping and applicable taxes are not included unless shown above.</p><p>Submitting this estimate does not place an order or begin production. We’ll review your project and confirm the final quote before payment.</p></section><div class="result-actions"><button id="submit-estimate" class="primary-button" type="button">REQUEST FINAL QUOTE</button></div><p id="submit-message" role="alert"></p>`;
+    result.innerHTML = `<p class="eyebrow">Your estimate is ready</p><h2>Estimate breakdown</h2><dl class="quote-breakdown"><div><dt>Service</dt><dd>${escapeHtml(serviceLabel(intent))}</dd></div>${intent === SERVICE_INTENTS.DESIGN_ONLY ? "" : `<div><dt>Estimated material</dt><dd>~${escapeHtml(Math.round(Number(analysis.totalGrams)))} g</dd></div><div><dt>Manufacturing estimate</dt><dd>${escapeHtml(money(estimate.manufacturing_total))} CAD</dd></div>`}${design ? `<div><dt>Design</dt><dd>${escapeHtml(money(design))} CAD</dd></div>` : ""}${assembly ? `<div><dt>Assembly</dt><dd>${escapeHtml(money(assembly))} CAD</dd></div>` : ""}${shipping ? shippingDisplay : ""}<div class="quote-total"><dt>Estimated total</dt><dd>${escapeHtml(money(estimate.estimated_total_max))} CAD</dd></div></dl>${shipping ? "" : shippingDisplay}${projectWarning}${estimate.requires_manual_review ? '<p class="notice"><strong>Review required.</strong> Final pricing will be confirmed after project review.</p>' : ""}<section class="estimate-disclaimer" aria-labelledby="estimate-disclaimer-title"><h3 id="estimate-disclaimer-title">About this estimate</h3><p>This is an automated estimate based on the uploaded 3D files and selected options. Final pricing is confirmed after Mucci Products reviews the files for printability, sizing, material requirements and production setup. Changes to the files, quantity, material, colour or requested specifications may require a revised quote. Shipping and applicable taxes are not included unless shown above.</p><p>Submitting this estimate does not place an order or begin production. We’ll review your project and confirm the final quote before payment.</p></section><div class="result-actions"><button id="submit-estimate" class="primary-button" type="button">REQUEST FINAL QUOTE</button></div><p id="submit-message" role="alert"></p>`;
     document.querySelector("#submit-estimate").addEventListener("click", submitEstimate);
     result.scrollIntoView({ behavior:"smooth", block:"start" });
   }
@@ -332,6 +353,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
   form.addEventListener("change", (event) => {
     if (event.target.name === "file_status") { renderDesignOptions(); updateConditionalFields(); }
     if (event.target.name === "service_intent") updateConditionalFields();
+    if (event.target.name === "advanced_settings_enabled") updateAdvancedSettings();
     if (event.target.name === "upload_mode") {
       modelItems = []; uploadRoot = crypto.randomUUID();
       document.querySelector("#individual-upload-row").classList.toggle("hidden", uploadMode() !== "individual");

@@ -8,6 +8,9 @@ test("built-in slicer returns time and material for a printable model", { timeou
   const { SLICER_PROFILES, A1_SPEED_REFERENCE } = await import("../estimator/slicer-config.js");
   assert.deepEqual(Object.keys(SLICER_PROFILES), ["standard", "draft", "preliminary"]);
   assert.equal(SLICER_PROFILES.standard.layer_height, 0.20);
+  assert.equal(SLICER_PROFILES.standard.infill_density, 0.30);
+  assert.equal(SLICER_PROFILES.standard.wall_loops, 3);
+  assert.equal(SLICER_PROFILES.standard.sparse_infill_pattern, "grid");
   assert.equal(SLICER_PROFILES.draft.layer_height, 0.24);
   assert.equal(SLICER_PROFILES.preliminary.wall_loops, 4);
   assert.equal(SLICER_PROFILES.preliminary.infill_density, 0.30);
@@ -28,6 +31,11 @@ test("built-in slicer returns time and material for a printable model", { timeou
       assert.ok(Number(result?.stats?.time_estimate) > 0);
       assert.ok(Number(result?.stats?.filament_mm) > 0);
       assert.ok(result?.gcode?.length > 0);
+    }
+    for (const sparse_infill_pattern of ["grid", "gyroid", "triangles"]) {
+      const result = slicer.slice(model, { ...SLICER_PROFILES.standard, sparse_infill_pattern });
+      assert.ok(Number(result?.stats?.time_estimate) > 0, `${sparse_infill_pattern} should produce a time estimate`);
+      assert.ok(Number(result?.stats?.filament_mm) > 0, `${sparse_infill_pattern} should produce material usage`);
     }
   } finally {
     slicer.dispose();

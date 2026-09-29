@@ -13,6 +13,7 @@ const estimate = {
   material:"PLA",
   colour_count:"2",
   assembly_required:false,
+  model_files:[{ name:"part.stl", print_settings:{ custom:true, infill_percent:60, wall_loops:6, infill_pattern:"triangles" } }],
   estimated_production_hours_max:12,
   admin_notes:"Never expose this internal note"
 };
@@ -33,6 +34,9 @@ test("builds a concise customer-safe Etsy package", () => {
   assert.match(prepared.description, /Quantity: 5/);
   assert.match(prepared.description, /Material: PLA/);
   assert.match(prepared.description, /Colours: 2/);
+  assert.match(prepared.description, /Infill: 60%/);
+  assert.match(prepared.description, /Wall loops: 6/);
+  assert.match(prepared.description, /Infill pattern: Triangles/);
   assert.doesNotMatch(prepared.description, /customer@example\.com|Never expose|123e4567|hourly|per[- ]gram/i);
   assert.match(prepared.summary, /Listing Quantity:\n1/);
   assert.match(prepared.summary, /Physical Quantity:\n5/);
