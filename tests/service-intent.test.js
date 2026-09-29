@@ -47,26 +47,36 @@ test("quote form presents required service and dimensions without changing exist
 
 test("customer estimator separates design, preliminary printing, and total pricing", () => {
   const source = read("estimator", "estimator.js");
-  assert.match(source, /calculate_service_estimate/);
-  assert.match(source, /submit_service_estimate/);
+  assert.match(source, /api\("\/api\/estimate-analysis"/);
+  assert.match(source, /api\("\/api\/estimate-submit"/);
   assert.match(source, /createVirtualBoundingBoxModel/);
-  assert.match(source, /sliceModel\(virtualModel, "preliminary"/);
+  assert.match(source, /printProfile:values\.file_status === "design" \? "preliminary"/);
   assert.match(source, /splitDimensionsForPrint/);
-  assert.match(source, /p_split_and_assembly_accepted/);
-  assert.match(source, /desired_colours\.required = includesPhysicalPrinting/);
-  assert.match(source, /p_desired_colours/);
-  assert.match(source, /p_material: physicalPrinting/);
+  assert.match(source, /splitAccepted/);
+  assert.match(source, /form\.elements\.desired_colours\.required = includesPhysicalPrinting/);
+  assert.match(source, /desiredColours/);
+  assert.match(source, /material:physical/);
   assert.match(source, /maxReferenceImages = 10/);
   assert.match(source, /maxReferenceImageBytes = 10 \* 1024 \* 1024/);
-  assert.match(source, /p_reference_files:referenceFiles/);
-  assert.match(source, /filePath \|\| referenceFiles\.length/);
-  assert.match(source, /sliceModel\(loadedModel, printProfile, slicingProgress, selected\("material"\)\)/);
-  assert.match(source, /\["ready", "modify"\]\.includes\(fileStatus\)/);
-  assert.match(source, /sliceModel\(loadedModel, printProfile/);
-  assert.match(source, /Physical 3D Printing/);
-  assert.match(source, /Preliminary 3D Print Estimate/);
-  assert.match(source, /Physical printing is not included/);
-  assert.match(source, /Final printing cost may change once the finished 3D model is available/);
+  assert.match(source, /referenceFiles/);
+  assert.match(source, /modelFiles/);
+  assert.match(source, /manufacturing_total/);
+  assert.match(source, /Shipping is added later/);
+});
+
+test("multi-file migration installs server pricing and submission RPCs", () => {
+  const sql = read("supabase", "migrations", "021_multi_file_manufacturing_pricing.sql");
+  assert.match(sql, /create or replace function public\.calculate_multi_file_estimate\(/);
+  assert.match(sql, /create or replace function public\.submit_multi_file_estimate\(/);
+  assert.match(sql, /jsonb_array_length\(model_files\) <= 8/);
+  assert.match(sql, /hourly_production_factor = 5/);
+  assert.match(sql, /material_rate_per_gram = 0\.28/);
+  assert.match(sql, /manufacturing_setup_charge = 10/);
+  assert.match(sql, /plate_charge = 4/);
+  assert.match(sql, /greatest\(cfg\.base_price, subtotal_amount \* risk\)/);
+  assert.match(sql, /grant execute on function public\.calculate_multi_file_estimate\(jsonb,jsonb\) to service_role/);
+  assert.match(sql, /grant execute on function public\.submit_multi_file_estimate\(jsonb,jsonb,jsonb\) to service_role/);
+  assert.match(sql, /notify pgrst, 'reload schema'/);
 });
 
 test("database migration stores separate service pricing and preserves quantity behavior", () => {

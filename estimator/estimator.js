@@ -234,7 +234,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
         const path = `${uploadRoot}/${crypto.randomUUID()}.stl`;
         status.textContent = "Preparing the preliminary manufacturing analysis…";
         await uploadFile(path, new Blob([virtual.binaryStl], { type:"model/stl" }), "model/stl");
-        request.virtualModels = [{ analysisPath:path, name:"Dimension-based preliminary model", quantity:splitPlan.sectionCount }];
+        request.virtualModels = [{ analysisPath:path, name:"Dimension-based preliminary model", quantity:splitPlan.sectionCount * Number(values.quantity) }];
       }
       button.textContent = "Analyzing models securely…";
       const response = await api("/api/estimate-analysis", { request });
