@@ -119,11 +119,16 @@ function fitViewer(group) {
 
 export async function loadAndPreviewModel(file, container) {
   ensureViewer(container);
-  const group = normalizeGroup(await parseModel(file));
-  const binaryStl = toBinaryStl(group);
+  const loaded = await loadModelForSlicing(file);
+  const group = loaded.group;
   fitViewer(group);
+  return { binaryStl:loaded.binaryStl, dimensions:loaded.dimensions };
+}
+
+export async function loadModelForSlicing(file) {
+  const group = normalizeGroup(await parseModel(file));
   const dimensions = new THREE.Box3().setFromObject(group).getSize(new THREE.Vector3());
-  return { binaryStl, dimensions:{ x:dimensions.x, y:dimensions.y, z:dimensions.z } };
+  return { group, binaryStl:toBinaryStl(group), dimensions:{ x:dimensions.x, y:dimensions.y, z:dimensions.z } };
 }
 
 export function createVirtualBoundingBoxModel(dimensions) {

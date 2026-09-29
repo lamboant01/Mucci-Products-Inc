@@ -1,9 +1,9 @@
-import { createVirtualBoundingBoxModel, loadAndPreviewModel, sliceModel } from "./model-slicer.js?v=mobile-large-parts-v2";
-import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrintSplitting, resolveServiceIntent, serviceLabel, splitDimensionsForPrint, unitMaximum } from "./service-intent.mjs?v=mobile-large-parts-v2";
+import { createVirtualBoundingBoxModel, loadAndPreviewModel, loadModelForSlicing } from "./model-slicer.js?v=multi-file-v1";
+import { MAX_MODEL_FILES, removeUpload, validateUploadSelection } from "./multi-file.mjs?v=multi-file-v1";
+import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrintSplitting, resolveServiceIntent, serviceLabel, splitDimensionsForPrint, unitMaximum } from "./service-intent.mjs?v=multi-file-v1";
 
 (function () {
   "use strict";
-
   const form = document.querySelector("#estimate-form");
   const result = document.querySelector("#estimate-result");
   const message = document.querySelector("#form-message");
@@ -11,182 +11,159 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
   const maxFileBytes = 25 * 1024 * 1024;
   const maxReferenceImageBytes = 10 * 1024 * 1024;
   const maxReferenceImages = 10;
-  const maxPrintableSectionDimensionMm = 250;
+  const maxModelDimensionMm = 250;
   const maxFinishedDimensionMm = 2500;
   const maxPrintableSections = 64;
-  const supportedExtensions = ["stl", "3mf", "obj", "step", "stp"];
   const supportedReferenceExtensions = ["png", "jpg", "jpeg", "webp", "heic", "heif", "gif"];
   const referenceContentTypes = Object.freeze({ png:"image/png", jpg:"image/jpeg", jpeg:"image/jpeg", webp:"image/webp", heic:"image/heic", heif:"image/heif", gif:"image/gif" });
-  const gcodeTime = window.MucciGcodeTime;
-  let calculatedPayload = null;
-  let calculatedResult = null;
+  let calculatedRequest = null;
+  let calculatedAnalysis = null;
+  let analysisToken = "";
   let publicOptions = null;
-  let loadedModel = null;
-  let modelLoadPromise = null;
-  let slicedPrintTime = null;
+  let modelItems = [];
+  let uploadRoot = crypto.randomUUID();
 
   if (!config.supabaseUrl || !config.supabaseAnonKey || !window.supabase) {
     form.innerHTML = '<p class="notice">The estimator is temporarily unavailable. Please contact Mucci Products through Etsy.</p>';
     return;
   }
-  // The public estimator must not inherit an administrator session saved by
-  // another page on the same origin. Its database and Storage calls are
-  // intentionally made with the anonymous role.
-  const client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, {
-    auth:{ persistSession:false, autoRefreshToken:false, detectSessionInUrl:false }
-  });
-
-  const money = (value) => new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" }).format(Number(value));
-  const range = (minimum, maximum) => Number(minimum) === Number(maximum) ? money(minimum) : `${money(minimum)}–${money(maximum)}`;
+  const client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, { auth:{ persistSession:false, autoRefreshToken:false, detectSessionInUrl:false } });
+  const money = (value) => new Intl.NumberFormat("en-CA", { style:"currency", currency:"CAD" }).format(Number(value || 0));
   const selected = (name) => form.querySelector(`[name="${name}"]:checked`)?.value || "";
-  const escapeHtml = (value) => String(value || "").replace(/[&<>'"]/g, (character) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" })[character]);
-  const isMobileDevice = () => window.matchMedia("(pointer: coarse)").matches || window.innerWidth <= 1024;
-  const withDesktopFallback = (error) => {
-    const detail = error?.message || "This model could not be processed.";
-    return isMobileDevice() && !error?.deviceIndependent
-      ? `${detail} Please use a desktop computer for this model.`
-      : detail;
-  };
+  const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" })[character]);
   const validationError = (detail) => Object.assign(new Error(detail), { deviceIndependent:true });
   const serviceIntent = () => resolveServiceIntent(selected("file_status"), selected("service_intent"));
-  const dimensionValues = () => ({
-    length:form.elements.dimension_length.value,
-    width:form.elements.dimension_width.value,
-    height:form.elements.dimension_height.value,
-    unit:form.elements.dimension_unit.value
-  });
+  const uploadMode = () => selected("upload_mode") || "individual";
+  const formatSize = (bytes) => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  const dimensionValues = () => ({ length:form.elements.dimension_length.value, width:form.elements.dimension_width.value, height:form.elements.dimension_height.value, unit:form.elements.dimension_unit.value });
+
+  async function api(endpoint, body) {
+    const response = await fetch(endpoint, { method:"POST", credentials:"same-origin", headers:{ "Content-Type":"application/json" }, body:JSON.stringify(body) });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "The estimate service could not complete this request.");
+    return payload;
+  }
+
+  function invalidateEstimate() {
+    if (!calculatedRequest) return;
+    calculatedRequest = null;
+    calculatedAnalysis = null;
+    analysisToken = "";
+    result.classList.add("hidden");
+    result.innerHTML = "";
+  }
 
   function renderDesignOptions() {
     if (!publicOptions) return;
     const ready = selected("file_status") === "ready";
-    const options = ready
-      ? [["none", "No design required", "$0"]]
-      : [["simple", "Simple Design", `+${money(publicOptions.design_simple)} CAD`], ["medium", "Medium Design", `+${money(publicOptions.design_medium)} CAD`], ["complex", "Complex Design", `+${money(publicOptions.design_complex)} CAD`]];
+    const options = ready ? [["none", "No design required", "$0"]] : [["simple", "Simple Design", `+${money(publicOptions.design_simple)} CAD`], ["medium", "Medium Design", `+${money(publicOptions.design_medium)} CAD`], ["complex", "Complex Design", `+${money(publicOptions.design_complex)} CAD`]];
     document.querySelector("#design-options").innerHTML = options.map(([value, label, price], index) => `<label class="choice"><input ${index === 0 ? "checked" : ""} required type="radio" name="design_level" value="${value}"><span><b>${label}</b><small>${price}</small></span></label>`).join("");
   }
 
   function updateConditionalFields() {
     const fileStatus = selected("file_status");
     const usesModel = ["ready", "modify"].includes(fileStatus);
-    const needsNoFileDetails = fileStatus === "design";
+    const noFile = fileStatus === "design";
     const intent = serviceIntent();
     const designOnly = intent === SERVICE_INTENTS.DESIGN_ONLY;
-    const designAndPrint = intent === SERVICE_INTENTS.DESIGN_AND_PRINT;
     document.querySelector("#file-upload-row").classList.toggle("hidden", !usesModel);
-    document.querySelector("#model-file").required = usesModel;
-    document.querySelector("#model-preview").classList.toggle("hidden", !usesModel || !loadedModel);
-    document.querySelector("#service-intent-row").classList.toggle("hidden", !needsNoFileDetails);
-    document.querySelector("#dimensions-row").classList.toggle("hidden", !needsNoFileDetails);
-    form.querySelectorAll('[name="service_intent"]').forEach((input) => { input.required = needsNoFileDetails; input.disabled = !needsNoFileDetails; });
-    ["dimension_length", "dimension_width", "dimension_height", "dimension_unit"].forEach((name) => {
-      form.elements[name].required = needsNoFileDetails;
-      form.elements[name].disabled = !needsNoFileDetails;
-    });
-    const splitInput = form.elements.split_and_assembly_accepted;
-    splitInput.disabled = !needsNoFileDetails;
-    if (!needsNoFileDetails) splitInput.checked = false;
-    document.querySelector("#quantity-section").classList.toggle("hidden", designOnly || (needsNoFileDetails && !designAndPrint));
-    document.querySelector("#print-profile-section").classList.toggle("hidden", needsNoFileDetails);
-    document.querySelector("#colour-section").classList.toggle("hidden", designOnly || (needsNoFileDetails && !designAndPrint));
-    document.querySelector("#assembly-section").classList.toggle("hidden", designOnly || (needsNoFileDetails && !designAndPrint));
-    form.querySelectorAll('[name="print_profile"]').forEach((input) => { input.disabled = needsNoFileDetails; input.required = !needsNoFileDetails; });
-    form.querySelectorAll('[name="colour_count"]').forEach((input) => { input.disabled = designOnly || (needsNoFileDetails && !designAndPrint); input.required = includesPhysicalPrinting(intent) && (!needsNoFileDetails || designAndPrint); });
-    form.querySelectorAll('[name="material"]').forEach((input) => { input.disabled = designOnly || (needsNoFileDetails && !designAndPrint); input.required = includesPhysicalPrinting(intent) && (!needsNoFileDetails || designAndPrint); });
-    form.elements.desired_colours.disabled = designOnly || (needsNoFileDetails && !designAndPrint) || !includesPhysicalPrinting(intent);
-    form.elements.desired_colours.required = includesPhysicalPrinting(intent) && (!needsNoFileDetails || designAndPrint);
-    form.querySelectorAll('[name="assembly_required"]').forEach((input) => { input.disabled = designOnly || (needsNoFileDetails && !designAndPrint); input.required = includesPhysicalPrinting(intent) && (!needsNoFileDetails || designAndPrint); });
-    document.querySelector("#service-intent-error").textContent = "";
-    document.querySelector("#dimensions-error").textContent = "";
+    document.querySelector("#model-preview").classList.toggle("hidden", !usesModel || !modelItems.some((item) => item.loaded));
+    document.querySelector("#service-intent-row").classList.toggle("hidden", !noFile);
+    document.querySelector("#dimensions-row").classList.toggle("hidden", !noFile);
+    form.querySelectorAll('[name="service_intent"]').forEach((input) => { input.required = noFile; input.disabled = !noFile; });
+    ["dimension_length", "dimension_width", "dimension_height", "dimension_unit"].forEach((name) => { form.elements[name].required = noFile; form.elements[name].disabled = !noFile; });
+    document.querySelector("#quantity-section").classList.toggle("hidden", usesModel || designOnly);
+    document.querySelector("#print-profile-section").classList.toggle("hidden", noFile);
+    document.querySelector("#colour-section").classList.toggle("hidden", designOnly);
+    document.querySelector("#assembly-section").classList.toggle("hidden", designOnly);
+    form.querySelectorAll('[name="print_profile"]').forEach((input) => { input.disabled = noFile; input.required = !noFile; });
+    form.querySelectorAll('[name="colour_count"], [name="material"], [name="assembly_required"]').forEach((input) => { input.disabled = designOnly; input.required = includesPhysicalPrinting(intent); });
+    form.elements.desired_colours.disabled = designOnly;
+    form.elements.desired_colours.required = includesPhysicalPrinting(intent);
     updateSplitConfirmation();
-    [...form.querySelectorAll("fieldset:not(.hidden)")].forEach((fieldset, index) => {
-      const step = fieldset.querySelector("legend > span");
-      if (step) step.textContent = String(index + 1);
-    });
+    [...form.querySelectorAll("fieldset:not(.hidden)")].forEach((fieldset, index) => { const step = fieldset.querySelector("legend > span"); if (step) step.textContent = String(index + 1); });
   }
 
   function validateNoFileDetails() {
     if (selected("file_status") !== "design") return null;
-    if (!serviceIntent()) {
-      document.querySelector("#service-intent-error").textContent = "Choose 3D Design Only or 3D Design + 3D Printing.";
-      throw validationError("Choose what service you need.");
-    }
-    try {
-      const dimensions = dimensionsToMm(dimensionValues(), maxFinishedDimensionMm);
-      const splitPlan = splitDimensionsForPrint(dimensions, maxPrintableSectionDimensionMm);
-      if (splitPlan.sectionCount > maxPrintableSections) throw new Error(`These dimensions require more than ${maxPrintableSections} printable sections. Contact us through Etsy for a manual project review.`);
-      if (requiresPrintSplitting(dimensions, maxPrintableSectionDimensionMm) && !form.elements.split_and_assembly_accepted.checked) {
-        throw new Error("Confirm that splitting the part into printable sections and assembly is acceptable.");
-      }
-      document.querySelector("#dimensions-error").textContent = "";
-      return dimensions;
-    } catch (error) {
-      document.querySelector("#dimensions-error").textContent = error.message;
-      throw validationError(error.message);
-    }
+    if (!serviceIntent()) throw validationError("Choose 3D Design Only or 3D Design + 3D Printing.");
+    const dimensions = dimensionsToMm(dimensionValues(), maxFinishedDimensionMm);
+    const splitPlan = splitDimensionsForPrint(dimensions, maxModelDimensionMm);
+    if (splitPlan.sectionCount > maxPrintableSections) throw validationError(`These dimensions require more than ${maxPrintableSections} printable sections. Contact us through Etsy for manual review.`);
+    if (splitPlan.sectionCount > 1 && !form.elements.split_and_assembly_accepted.checked) throw validationError("Confirm that splitting and assembly is acceptable.");
+    return dimensions;
   }
 
   function updateDimensionLimits() {
     const unit = form.elements.dimension_unit.value;
     const maximum = unitMaximum(unit, maxFinishedDimensionMm);
     ["dimension_length", "dimension_width", "dimension_height"].forEach((name) => { form.elements[name].max = String(maximum); });
-    const unitLabel = unit || "mm";
-    document.querySelector("#dimension-limit-help").textContent = `Maximum ${maximum} ${unitLabel} per dimension.`;
-  }
-
-  function dimensionValidationMessage() {
-    const unit = form.elements.dimension_unit.value;
-    if (!unit) return "Complete the length, width, height, and unit with values greater than zero.";
-    return `Enter length, width, and height greater than zero and no more than ${unitMaximum(unit, maxFinishedDimensionMm)} ${unit}.`;
+    document.querySelector("#dimension-limit-help").textContent = `Maximum ${maximum} ${unit || "mm"} per dimension.`;
   }
 
   function updateSplitConfirmation() {
     const row = document.querySelector("#split-confirmation-row");
     const input = form.elements.split_and_assembly_accepted;
     let oversized = false;
-    if (selected("file_status") === "design") {
-      try {
-        oversized = requiresPrintSplitting(dimensionsToMm(dimensionValues(), maxFinishedDimensionMm), maxPrintableSectionDimensionMm);
-      } catch (_) {}
-    }
+    if (selected("file_status") === "design") { try { oversized = requiresPrintSplitting(dimensionsToMm(dimensionValues(), maxFinishedDimensionMm), maxModelDimensionMm); } catch (_) {} }
     row.classList.toggle("hidden", !oversized);
     input.required = oversized;
     input.disabled = selected("file_status") !== "design";
     if (!oversized) input.checked = false;
   }
 
-  function payloadFromForm() {
-    const values = Object.fromEntries(new FormData(form));
-    const intent = resolveServiceIntent(values.file_status, values.service_intent);
-    const physicalPrinting = includesPhysicalPrinting(intent);
-    const usesSlicer = physicalPrinting && slicedPrintTime;
-    const dimensions = values.file_status === "design" ? dimensionsToMm({ length:values.dimension_length, width:values.dimension_width, height:values.dimension_height, unit:values.dimension_unit }, maxFinishedDimensionMm) : null;
-    const splitAccepted = Boolean(dimensions && requiresPrintSplitting(dimensions, maxPrintableSectionDimensionMm) && values.split_and_assembly_accepted === "true");
-    return {
-      p_file_status: values.file_status,
-      p_service_intent: intent,
-      p_quantity: intent === SERVICE_INTENTS.DESIGN_ONLY ? 1 : Number(values.quantity),
-      p_print_hours_per_item: usesSlicer ? slicedPrintTime.hours : null,
-      p_print_minutes_per_item: usesSlicer ? slicedPrintTime.minutes : null,
-      p_filament_grams_per_item: usesSlicer ? slicedPrintTime.grams : null,
-      p_colour_count: physicalPrinting ? values.colour_count : "1",
-      p_material: physicalPrinting ? values.material : null,
-      p_design_level: values.design_level,
-      p_assembly_required: physicalPrinting && (values.assembly_required === "true" || splitAccepted),
-      p_split_and_assembly_accepted:splitAccepted,
-      p_model_length_mm: dimensions?.x || loadedModel?.dimensions?.x || null,
-      p_model_width_mm: dimensions?.y || loadedModel?.dimensions?.y || null,
-      p_model_height_mm: dimensions?.z || loadedModel?.dimensions?.z || null
-    };
+  function renderModelFiles() {
+    const project = uploadMode() === "project";
+    document.querySelector("#model-file-count").textContent = `Files uploaded: ${modelItems.length} / ${project ? 1 : MAX_MODEL_FILES}`;
+    document.querySelector("#model-file-list").innerHTML = modelItems.map((item) => `<article class="model-file-row">
+      <div class="model-file-name"><strong title="${escapeHtml(item.file.name)}">${escapeHtml(item.file.name)}</strong><small>${escapeHtml(formatSize(item.file.size))} · <span>${escapeHtml(item.status)}</span></small></div>
+      ${project ? '<span class="model-file-quantity">Complete project</span>' : `<label class="model-file-quantity">Qty <input type="number" min="1" max="999" step="1" inputmode="numeric" value="${escapeHtml(item.quantity)}" data-file-quantity="${escapeHtml(item.id)}" aria-label="Quantity for ${escapeHtml(item.file.name)}"></label>`}
+      <button class="model-file-remove" type="button" data-remove-file="${escapeHtml(item.id)}">Remove</button></article>`).join("");
+    document.querySelectorAll("[data-remove-file]").forEach((button) => button.addEventListener("click", () => {
+      modelItems = removeUpload(modelItems, button.dataset.removeFile);
+      renderModelFiles(); invalidateEstimate();
+      if (!modelItems.length) document.querySelector("#model-preview").classList.add("hidden");
+    }));
+    document.querySelectorAll("[data-file-quantity]").forEach((input) => input.addEventListener("change", () => {
+      const quantity = Number(input.value);
+      input.setCustomValidity(Number.isInteger(quantity) && quantity >= 1 && quantity <= 999 ? "" : "Enter a quantity from 1 to 999.");
+      if (!input.reportValidity()) return;
+      const item = modelItems.find((candidate) => candidate.id === input.dataset.fileQuantity);
+      if (item) item.quantity = quantity;
+      invalidateEstimate();
+    }));
   }
 
-  function validateFile() {
-    if (!["ready", "modify"].includes(selected("file_status"))) return null;
-    const file = document.querySelector("#model-file").files[0];
-    if (!file) throw validationError("Choose a 3D model file so we can prepare the print-time estimate.");
-    const extension = file.name.split(".").pop().toLowerCase();
-    if (!supportedExtensions.includes(extension)) throw validationError("Choose an STL, 3MF, OBJ, STEP, or STP file.");
-    if (file.size > maxFileBytes) throw validationError("The 3D file must be 25 MB or smaller.");
-    return { file, extension };
+  async function addModelFiles(files) {
+    const mode = uploadMode();
+    const incoming = validateUploadSelection(files, mode, maxFileBytes);
+    if (mode === "individual" && modelItems.length + incoming.length > MAX_MODEL_FILES) throw validationError(`Choose no more than ${MAX_MODEL_FILES} individual model files.`);
+    const additions = incoming.map((file) => ({ id:crypto.randomUUID(), file, extension:file.name.split(".").pop().toLowerCase(), quantity:1, status:"Preparing…", loaded:null, path:null, analysisPath:null }));
+    modelItems = mode === "project" ? additions : [...modelItems, ...additions];
+    renderModelFiles();
+    document.querySelector("#model-upload-status").textContent = "Preparing model analysis…";
+    for (const item of additions) {
+      try {
+        item.loaded = modelItems[0] === item ? await loadAndPreviewModel(item.file, document.querySelector("#model-viewer")) : await loadModelForSlicing(item.file);
+        const { x, y, z } = item.loaded.dimensions;
+        if (mode === "individual" && Math.max(x, y, z) > maxModelDimensionMm) throw validationError(`${item.file.name} must fit within 250 × 250 × 250 mm.`);
+        item.status = `${x.toFixed(1)} × ${y.toFixed(1)} × ${z.toFixed(1)} mm · Ready`;
+      } catch (error) { item.status = error.message || "Analysis failed"; item.loaded = null; }
+      renderModelFiles();
+    }
+    document.querySelector("#model-upload-status").textContent = modelItems.every((item) => item.loaded) ? "All selected models are ready." : "One or more models could not be prepared.";
+    document.querySelector("#model-preview").classList.toggle("hidden", !modelItems.some((item) => item.loaded));
+    document.querySelector("#model-status").textContent = modelItems[0]?.status || "";
+    invalidateEstimate();
+  }
+
+  function validateModels() {
+    if (!["ready", "modify"].includes(selected("file_status"))) return [];
+    validateUploadSelection(modelItems.map((item) => item.file), uploadMode(), maxFileBytes);
+    if (modelItems.some((item) => !item.loaded)) throw validationError("Every selected model must finish preparing before pricing.");
+    if (modelItems.some((item) => !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 999)) throw validationError("Each model quantity must be between 1 and 999.");
+    if (modelItems.reduce((sum, item) => sum + item.quantity, 0) > 999) throw validationError("The combined model quantity cannot exceed 999 items.");
+    return modelItems;
   }
 
   function validateReferenceImages() {
@@ -194,233 +171,151 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
     if (files.length > maxReferenceImages) throw validationError(`Choose no more than ${maxReferenceImages} reference images.`);
     return files.map((file) => {
       const extension = file.name.split(".").pop().toLowerCase();
-      if (!supportedReferenceExtensions.includes(extension)) throw validationError(`${file.name} is not a supported image. Choose PNG, JPEG, WebP, HEIC, HEIF, or GIF.`);
+      if (!supportedReferenceExtensions.includes(extension)) throw validationError(`${file.name} is not a supported image.`);
       if (file.size <= 0 || file.size > maxReferenceImageBytes) throw validationError(`${file.name} must be 10 MB or smaller.`);
       return { file, extension, contentType:referenceContentTypes[extension] };
     });
   }
 
-  function updateReferenceImageStatus() {
-    const status = document.querySelector("#reference-images-status");
-    try {
-      const files = validateReferenceImages();
-      status.textContent = files.length ? `${files.length} reference image${files.length === 1 ? "" : "s"} ready to upload with this quote.` : "";
-    } catch (error) {
-      status.textContent = error.message;
-    }
+  async function uploadFile(path, file, contentType) {
+    const { error } = await client.storage.from("print-estimate-files").upload(path, file, { upsert:false, contentType:contentType || file.type || "application/octet-stream" });
+    if (error) throw new Error(`The file could not be uploaded: ${error.message}`);
   }
 
-  async function handleModelFile(event) {
-    const preview = document.querySelector("#model-preview");
-    const status = document.querySelector("#model-status");
-    loadedModel = null;
-    slicedPrintTime = null;
-    preview.classList.add("hidden");
-    const file = event.target.files[0];
-    if (!file) return;
-    try {
-      validateFile();
-      preview.classList.remove("hidden");
-      status.textContent = "Preparing the 3D preview…";
-      modelLoadPromise = loadAndPreviewModel(file, document.querySelector("#model-viewer"));
-      loadedModel = await modelLoadPromise;
-      const { x, y, z } = loadedModel.dimensions;
-      if (Math.max(x, y, z) > maxModelDimensionMm) {
-        loadedModel = null;
-        throw validationError("The model must fit within 250 × 250 × 250 mm.");
+  async function ensureModelUploads(items, status) {
+    for (const item of items) {
+      if (!item.path) { status.textContent = `Uploading ${item.file.name}…`; item.path = `${uploadRoot}/${crypto.randomUUID()}.${item.extension}`; await uploadFile(item.path, item.file); }
+      if (!item.analysisPath) {
+        if (item.extension === "stl") item.analysisPath = item.path;
+        else { status.textContent = `Preparing secure analysis for ${item.file.name}…`; item.analysisPath = `${uploadRoot}/${crypto.randomUUID()}.stl`; await uploadFile(item.analysisPath, new Blob([item.loaded.binaryStl], { type:"model/stl" }), "model/stl"); }
       }
-      status.textContent = `Model ready: ${x.toFixed(1)} × ${y.toFixed(1)} × ${z.toFixed(1)} mm.`;
-    } catch (error) {
-      modelLoadPromise = null;
-      status.textContent = withDesktopFallback(error);
     }
   }
 
-  function slicingProgress(event) {
-    const status = document.querySelector("#slice-status");
-    if (event) status.textContent = "Preparing your estimate…";
+  function baseRequest(values, dimensions) {
+    const intent = resolveServiceIntent(values.file_status, values.service_intent);
+    const physical = includesPhysicalPrinting(intent);
+    const splitPlan = dimensions ? splitDimensionsForPrint(dimensions, maxModelDimensionMm) : null;
+    const splitAccepted = Boolean(splitPlan?.sectionCount > 1 && values.split_and_assembly_accepted === "true");
+    const quantity = ["ready", "modify"].includes(values.file_status) ? modelItems.reduce((sum, item) => sum + item.quantity, 0) : intent === SERVICE_INTENTS.DESIGN_ONLY ? 1 : Number(values.quantity);
+    return {
+      fileStatus:values.file_status, serviceIntent:intent,
+      uploadMode:["ready", "modify"].includes(values.file_status) ? uploadMode() : intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? "virtual" : null,
+      uploadRoot, quantity, printProfile:values.file_status === "design" ? "preliminary" : values.print_profile,
+      material:physical ? values.material : null, colourCount:physical ? values.colour_count : "1",
+      desiredColours:physical ? values.desired_colours.trim() : null, designLevel:values.design_level,
+      assemblyRequired:physical && (values.assembly_required === "true" || splitAccepted), splitAccepted,
+      estimatedSectionCount:splitPlan?.sectionCount || 1,
+      modelLengthMm:dimensions?.x || Math.max(0, ...modelItems.map((item) => item.loaded?.dimensions?.x || 0)) || null,
+      modelWidthMm:dimensions?.y || Math.max(0, ...modelItems.map((item) => item.loaded?.dimensions?.y || 0)) || null,
+      modelHeightMm:dimensions?.z || Math.max(0, ...modelItems.map((item) => item.loaded?.dimensions?.z || 0)) || null,
+      submittedLength:dimensions ? Number(values.dimension_length) : null, submittedWidth:dimensions ? Number(values.dimension_width) : null,
+      submittedHeight:dimensions ? Number(values.dimension_height) : null, dimensionUnit:dimensions ? values.dimension_unit : null,
+      shipping:0,
+      modelFiles:modelItems.map((item) => ({ path:item.path, analysisPath:item.analysisPath, name:item.file.name, sizeBytes:item.file.size, quantity:item.quantity }))
+    };
   }
 
   async function calculate(event) {
-    event.preventDefault();
-    message.textContent = "";
+    event.preventDefault(); message.textContent = "";
+    const button = form.querySelector('button[type="submit"]');
     try {
-      const noFileDimensions = validateNoFileDetails();
+      const dimensions = validateNoFileDetails();
       if (!form.reportValidity()) return;
-      const button = form.querySelector('button[type="submit"]');
       button.disabled = true;
-      const fileStatus = selected("file_status");
+      const values = Object.fromEntries(new FormData(form));
       const intent = serviceIntent();
-      const printProfile = selected("print_profile");
-      if (["ready", "modify"].includes(fileStatus)) {
-        validateFile();
-        button.textContent = "Preparing model…";
-        if (modelLoadPromise) loadedModel = await modelLoadPromise;
-        if (!loadedModel) throw new Error("Wait for the 3D model preview to finish, then try again.");
-        const sliced = await sliceModel(loadedModel, printProfile, slicingProgress, selected("material"));
-        const parsed = gcodeTime?.parse(sliced.gcode);
-        const estimatedSeconds = sliced.seconds || parsed?.seconds;
-        if (!estimatedSeconds) throw new Error("The slicer generated G-code but did not return a usable print-time estimate.");
-        slicedPrintTime = { ...gcodeTime.toHoursMinutes(estimatedSeconds), grams:sliced.filamentGrams };
-        document.querySelector("#slice-status").textContent = "";
-      } else if (intent === SERVICE_INTENTS.DESIGN_AND_PRINT) {
-        button.textContent = "Preparing preliminary print estimate…";
-        const splitPlan = splitDimensionsForPrint(noFileDimensions, maxPrintableSectionDimensionMm);
-        const virtualModel = createVirtualBoundingBoxModel(splitPlan.sectionDimensions);
-        const sliced = await sliceModel(virtualModel, "preliminary", slicingProgress, selected("material"));
-        if (!sliced.seconds) throw new Error("The preliminary print estimate could not be prepared from these dimensions.");
-        slicedPrintTime = { ...gcodeTime.toHoursMinutes(sliced.seconds * splitPlan.sectionCount), grams:sliced.filamentGrams * splitPlan.sectionCount, sections:splitPlan.sectionCount };
-        document.querySelector("#slice-status").textContent = "";
-      } else {
-        slicedPrintTime = null;
+      const status = document.querySelector("#slice-status");
+      if (["ready", "modify"].includes(values.file_status)) await ensureModelUploads(validateModels(), status);
+      const request = baseRequest(values, dimensions);
+      if (intent === SERVICE_INTENTS.DESIGN_AND_PRINT) {
+        const splitPlan = splitDimensionsForPrint(dimensions, maxModelDimensionMm);
+        const virtual = createVirtualBoundingBoxModel(splitPlan.sectionDimensions);
+        const path = `${uploadRoot}/${crypto.randomUUID()}.stl`;
+        status.textContent = "Preparing the preliminary manufacturing analysis…";
+        await uploadFile(path, new Blob([virtual.binaryStl], { type:"model/stl" }), "model/stl");
+        request.virtualModels = [{ analysisPath:path, name:"Dimension-based preliminary model", quantity:splitPlan.sectionCount }];
       }
-      const payload = payloadFromForm();
-      button.textContent = "Calculating price…";
-      const { data, error } = await client.rpc("calculate_service_estimate", payload);
-      if (error) throw validationError(error.message || "The pricing service could not calculate this estimate.");
-      calculatedPayload = payload;
-      calculatedResult = Array.isArray(data) ? data[0] : data;
-      renderEstimate(calculatedResult);
-      button.disabled = false;
+      button.textContent = "Analyzing models securely…";
+      const response = await api("/api/estimate-analysis", { request });
+      calculatedRequest = request; calculatedAnalysis = response.analysis; analysisToken = response.token;
+      status.textContent = "";
+      renderEstimate(response.estimate, response.analysis);
       button.textContent = "Recalculate estimate";
-    } catch (error) {
-      message.textContent = ["ready", "modify"].includes(selected("file_status"))
-        ? withDesktopFallback(error)
-        : (error.message || "We could not calculate this estimate. Please try again.");
-      const button = form.querySelector('button[type="submit"]');
-      button.disabled = false;
-      button.textContent = "Calculate estimate";
-    }
+    } catch (error) { message.textContent = error.message || "We could not calculate this estimate."; button.textContent = "Calculate estimate"; }
+    finally { button.disabled = false; }
   }
 
-  function renderEstimate(estimate) {
-    const intent = calculatedPayload.p_service_intent;
-    const plannedSectionCount = calculatedPayload.p_split_and_assembly_accepted
-      ? splitDimensionsForPrint({ x:calculatedPayload.p_model_length_mm, y:calculatedPayload.p_model_width_mm, z:calculatedPayload.p_model_height_mm }, maxPrintableSectionDimensionMm).sectionCount
-      : 1;
-    const printingLabel = intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? "Preliminary 3D Print Estimate" : "Physical 3D Printing";
-    const designValue = range(estimate.design_estimate_min, estimate.design_estimate_max);
-    const printValue = estimate.print_estimate_min == null ? "Not included" : `${range(estimate.print_estimate_min, estimate.print_estimate_max)} CAD`;
-    const totalValue = range(estimate.estimated_total_min, estimate.estimated_total_max);
-    const sectionNote = calculatedPayload.p_split_and_assembly_accepted ? ` The estimate plans for approximately ${escapeHtml(plannedSectionCount)} printable sections, with final cuts and joints confirmed during review.` : "";
-    const preliminaryNote = intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? `<p class="notice">This is a preliminary printing estimate based on the dimensions provided. Final printing cost may change once the finished 3D model is available. The overall dimensions are used as a conservative planning boundary; this does not assume the finished object is a solid block.${sectionNote}</p>` : "";
-    const designOnlyNote = intent === SERVICE_INTENTS.DESIGN_ONLY ? `<p class="notice">This estimate covers creation of the 3D model only. Physical printing is not included.${sectionNote}</p>` : "";
-    const quantityMeta = intent === SERVICE_INTENTS.DESIGN_ONLY ? "" : `<span><strong>Quantity:</strong> ${escapeHtml(calculatedPayload.p_quantity)}</span>`;
+  function timeLabel(hours) { const minutes = Math.round(Number(hours || 0) * 60); return `${Math.floor(minutes / 60)} h ${minutes % 60} min`; }
+
+  function renderEstimate(estimate, analysis) {
+    const intent = calculatedRequest.serviceIntent;
+    const design = Number(estimate.design_fee || 0), assembly = Number(estimate.assembly_fee || 0), shipping = Number(estimate.shipping || 0);
+    const projectWarning = analysis.manualReview ? '<p class="notice"><strong>Manual plate confirmation required.</strong> This 3MF contains multiple plate references. Mucci Products will verify the separate plate times before final pricing.</p>' : "";
     result.classList.remove("hidden");
-    result.innerHTML = `<p class="eyebrow">Your estimate is ready</p><h2>Estimate breakdown</h2><dl class="quote-breakdown"><div><dt>Service</dt><dd>${escapeHtml(serviceLabel(intent))}</dd></div>${intent === SERVICE_INTENTS.PRINT_ONLY ? "" : `<div><dt>3D Design Estimate</dt><dd>${designValue} CAD</dd></div>`}<div><dt>${printingLabel}</dt><dd>${printValue}</dd></div><div class="quote-total"><dt>Estimated ${intent === SERVICE_INTENTS.DESIGN_ONLY ? "Design" : "Project"} Total</dt><dd>${totalValue} CAD</dd></div></dl>${designOnlyNote}${preliminaryNote}<div class="result-meta">${quantityMeta}${estimate.print_price_per_item_min == null ? "" : `<span><strong>Approximate printing price per item:</strong> ${range(estimate.print_price_per_item_min, estimate.print_price_per_item_max)} CAD</span>`}</div>${estimate.requires_manual_review ? '<p class="notice"><strong>Review required.</strong> This project needs manual confirmation before final pricing.</p>' : ""}<p>Estimate only. Final pricing is confirmed after your project and files are reviewed.</p><p>Submitting an estimate does not create an order or charge you. If you contacted us through Etsy, your final order and payment will be completed through Etsy.</p><div class="result-actions"><button id="submit-estimate" class="primary-button" type="button">SUBMIT ESTIMATE</button></div><p id="submit-message" role="alert"></p>`;
+    result.innerHTML = `<p class="eyebrow">Your estimate is ready</p><h2>Estimate breakdown</h2><dl class="quote-breakdown"><div><dt>Service</dt><dd>${escapeHtml(serviceLabel(intent))}</dd></div>${intent === SERVICE_INTENTS.DESIGN_ONLY ? "" : `<div><dt>Total print time</dt><dd>${escapeHtml(timeLabel(analysis.totalHours))}</dd></div><div><dt>Material</dt><dd>${escapeHtml(Number(analysis.totalGrams).toFixed(1))} g</dd></div><div><dt>Print plates / jobs</dt><dd>${escapeHtml(analysis.plateCount)}</dd></div><div><dt>Large-job factor</dt><dd>${escapeHtml(Number(estimate.risk_multiplier).toFixed(2))}×</dd></div><div><dt>Manufacturing</dt><dd>${escapeHtml(money(estimate.manufacturing_total))} CAD</dd></div>`}${design ? `<div><dt>Design</dt><dd>${escapeHtml(money(design))} CAD</dd></div>` : ""}${assembly ? `<div><dt>Assembly</dt><dd>${escapeHtml(money(assembly))} CAD</dd></div>` : ""}${shipping ? `<div><dt>Shipping</dt><dd>${escapeHtml(money(shipping))} CAD</dd></div>` : ""}<div class="quote-total"><dt>Estimated total</dt><dd>${escapeHtml(money(estimate.estimated_total_max))} CAD</dd></div></dl>${projectWarning}${estimate.requires_manual_review ? '<p class="notice"><strong>Review required.</strong> Final pricing will be confirmed after project review.</p>' : ""}<p>Shipping is added later when the destination and package are known.</p><div class="result-actions"><button id="submit-estimate" class="primary-button" type="button">SUBMIT ESTIMATE</button></div><p id="submit-message" role="alert"></p>`;
     document.querySelector("#submit-estimate").addEventListener("click", submitEstimate);
     result.scrollIntoView({ behavior:"smooth", block:"start" });
   }
 
   async function submitEstimate() {
-    const submitButton = document.querySelector("#submit-estimate");
-    const submitMessage = document.querySelector("#submit-message");
-    submitButton.disabled = true;
-    submitButton.textContent = "Submitting…";
-    submitMessage.textContent = "";
+    const button = document.querySelector("#submit-estimate"), status = document.querySelector("#submit-message");
+    button.disabled = true; button.textContent = "Submitting…"; status.textContent = "";
     try {
-      const currentPayload = payloadFromForm();
-      if (JSON.stringify(currentPayload) !== JSON.stringify(calculatedPayload)) throw new Error("Your project details changed. Please recalculate before submitting.");
+      if (!analysisToken || !calculatedRequest || !calculatedAnalysis) throw new Error("Recalculate this estimate before submitting.");
       const values = Object.fromEntries(new FormData(form));
-      const intent = calculatedPayload.p_service_intent;
-      const physicalPrinting = includesPhysicalPrinting(intent);
-      const submittedDimensions = values.file_status === "design" ? dimensionsToMm({ length:values.dimension_length, width:values.dimension_width, height:values.dimension_height, unit:values.dimension_unit }, maxFinishedDimensionMm) : null;
-      const selectedFile = validateFile();
-      const selectedReferenceImages = validateReferenceImages();
-      const uploadRoot = crypto.randomUUID();
-      let filePath = null;
-      if (selectedFile) {
-        filePath = `${uploadRoot}/${crypto.randomUUID()}.${selectedFile.extension}`;
-        const { error: uploadError } = await client.storage.from("print-estimate-files").upload(filePath, selectedFile.file, { upsert:false, contentType:selectedFile.file.type || "application/octet-stream" });
-        if (uploadError) throw new Error(`The file could not be uploaded: ${uploadError.message}`);
-      }
       const referenceFiles = [];
-      if (selectedReferenceImages.length) submitButton.textContent = "Uploading reference images…";
-      for (const reference of selectedReferenceImages) {
+      for (const reference of validateReferenceImages()) {
+        button.textContent = `Uploading ${reference.file.name}…`;
         const path = `${uploadRoot}/references/${crypto.randomUUID()}.${reference.extension}`;
-        const { error:uploadError } = await client.storage.from("print-estimate-files").upload(path, reference.file, { upsert:false, contentType:reference.contentType });
-        if (uploadError) throw new Error(`${reference.file.name} could not be uploaded: ${uploadError.message}`);
+        await uploadFile(path, reference.file, reference.contentType);
         referenceFiles.push({ path, name:reference.file.name, content_type:reference.contentType, size_bytes:reference.file.size });
       }
-      const { data, error } = await client.rpc("submit_service_estimate", {
-        ...calculatedPayload,
-        p_name: values.name.trim() || null, p_file_path: filePath,
-        p_original_file_name: selectedFile?.file.name || null,
-        p_submitted_length: values.file_status === "design" ? Number(values.dimension_length) : null,
-        p_submitted_width: values.file_status === "design" ? Number(values.dimension_width) : null,
-        p_submitted_height: values.file_status === "design" ? Number(values.dimension_height) : null,
-        p_dimension_unit: values.file_status === "design" ? values.dimension_unit : null,
-        p_estimated_section_count: calculatedPayload.p_split_and_assembly_accepted ? splitDimensionsForPrint(submittedDimensions, maxPrintableSectionDimensionMm).sectionCount : 1,
-        p_desired_colours: physicalPrinting ? values.desired_colours.trim() : null,
-        p_print_time_source: intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? "virtual_bounding_box" : physicalPrinting ? "slicer" : "unknown",
-        p_print_profile: intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? "standard" : physicalPrinting ? values.print_profile : null,
-        p_notes: values.notes.trim() || null,
-        p_reference_files:referenceFiles
-      });
-      if (error) throw error;
-      const submission = Array.isArray(data) ? data[0] : data;
+      const submission = await api("/api/estimate-submit", { token:analysisToken, customer:{ name:values.name.trim() || null, notes:values.notes.trim() || null, referenceFiles } });
       const processingBody = JSON.stringify({ quoteCode:submission.quote_code, notificationToken:submission.notification_token });
-      const trigger = (url) => fetch(url, {
-        method:"POST", headers:{ "Content-Type":"application/json" }, body:processingBody, keepalive:true
-      }).then((response) => { if (!response.ok) console.error(`${url} could not process the saved estimate.`); });
-      void Promise.allSettled([
-        trigger("/api/estimate-notification"),
-        ...(filePath || referenceFiles.length ? [trigger("/api/estimate-drive")] : [])
-      ]);
+      const trigger = (url) => fetch(url, { method:"POST", headers:{ "Content-Type":"application/json" }, body:processingBody, keepalive:true });
+      void Promise.allSettled([trigger("/api/estimate-notification"), ...(calculatedRequest.modelFiles.length || referenceFiles.length ? [trigger("/api/estimate-drive")] : [])]);
       renderSuccess(submission);
-    } catch (error) {
-      submitMessage.textContent = error.message || "We could not submit your estimate. Please try again.";
-      submitButton.disabled = false;
-      submitButton.textContent = "SUBMIT ESTIMATE";
-    }
+    } catch (error) { status.textContent = error.message || "We could not submit your estimate."; button.disabled = false; button.textContent = "SUBMIT ESTIMATE"; }
   }
 
   function renderSuccess(submission) {
-    const quoteCode = submission.quote_code;
-    const intent = calculatedPayload.p_service_intent;
-    const etsyMessage = `Hi! I completed the Mucci Products 3D Printing Estimator.\n\nMy quote code is ${quoteCode}.\n\nPlease review my project and send me the final Etsy listing when ready.`;
-    form.remove();
-    result.classList.remove("hidden");
-    const printing = submission.print_estimate_min == null ? "Not included" : `${range(submission.print_estimate_min, submission.print_estimate_max)} CAD`;
-    result.innerHTML = `<p class="eyebrow">Estimate Submitted</p><h2>Saved estimate breakdown</h2><dl class="quote-breakdown"><div><dt>Service</dt><dd>${escapeHtml(serviceLabel(intent))}</dd></div>${intent === SERVICE_INTENTS.PRINT_ONLY ? "" : `<div><dt>3D Design</dt><dd>${range(submission.design_estimate_min, submission.design_estimate_max)} CAD</dd></div>`}<div><dt>${intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? "Preliminary Printing" : "Physical Printing"}</dt><dd>${printing}</dd></div><div class="quote-total"><dt>Estimated Total</dt><dd>${range(submission.estimated_total_min, submission.estimated_total_max)} CAD</dd></div></dl><p>Your Quote Code:</p><div class="quote-code">${escapeHtml(quoteCode)}</div><p class="etsy-instruction">Send this code to Mucci Products on Etsy.</p><div class="result-actions"><button class="secondary-button" type="button" data-copy-code>COPY CODE</button><button class="secondary-button" type="button" data-copy-message>COPY ETSY MESSAGE</button><a class="primary-button" href="${escapeHtml(config.etsyUrl || "#")}" target="_blank" rel="noreferrer">OPEN ETSY</a></div><p class="notice">This is an estimate only. Final pricing will be confirmed after Mucci Products reviews your project.</p><p id="copy-status" role="status"></p>`;
+    const code = submission.quote_code;
+    const etsyMessage = `Hi! I completed the Mucci Products 3D Printing Estimator.\n\nMy quote code is ${code}.\n\nPlease review my project and send me the final Etsy listing when ready.`;
+    form.remove(); result.classList.remove("hidden");
+    result.innerHTML = `<p class="eyebrow">Estimate submitted</p><h2>Saved estimate</h2><dl class="quote-breakdown"><div><dt>Manufacturing</dt><dd>${money(submission.manufacturing_total)} CAD</dd></div>${Number(submission.design_fee) ? `<div><dt>Design</dt><dd>${money(submission.design_fee)} CAD</dd></div>` : ""}${Number(submission.assembly_fee) ? `<div><dt>Assembly</dt><dd>${money(submission.assembly_fee)} CAD</dd></div>` : ""}<div class="quote-total"><dt>Estimated total</dt><dd>${money(submission.estimated_total_max)} CAD</dd></div></dl><p>Your Quote Code:</p><div class="quote-code">${escapeHtml(code)}</div><p class="etsy-instruction">Send this code to Mucci Products on Etsy.</p><div class="result-actions"><button class="secondary-button" type="button" data-copy-code>COPY CODE</button><button class="secondary-button" type="button" data-copy-message>COPY ETSY MESSAGE</button><a class="primary-button" href="${escapeHtml(config.etsyUrl || "#")}" target="_blank" rel="noreferrer">OPEN ETSY</a></div><p class="notice">Shipping and final pricing are confirmed after review.</p><p id="copy-status" role="status"></p>`;
     const copy = async (text, confirmation) => { await navigator.clipboard.writeText(text); document.querySelector("#copy-status").textContent = confirmation; };
-    document.querySelector("[data-copy-code]").addEventListener("click", () => copy(quoteCode, "Quote code copied."));
+    document.querySelector("[data-copy-code]").addEventListener("click", () => copy(code, "Quote code copied."));
     document.querySelector("[data-copy-message]").addEventListener("click", () => copy(etsyMessage, "Etsy message copied."));
     window.scrollTo({ top:0, behavior:"smooth" });
   }
 
   form.addEventListener("change", (event) => {
-    if (event.target.name === "file_status") renderDesignOptions();
-    if (["file_status", "service_intent"].includes(event.target.name)) updateConditionalFields();
+    if (event.target.name === "file_status") { renderDesignOptions(); updateConditionalFields(); }
+    if (event.target.name === "service_intent") updateConditionalFields();
+    if (event.target.name === "upload_mode") {
+      modelItems = []; uploadRoot = crypto.randomUUID();
+      document.querySelector("#individual-upload-row").classList.toggle("hidden", uploadMode() !== "individual");
+      document.querySelector("#project-upload-row").classList.toggle("hidden", uploadMode() !== "project");
+      document.querySelector("#model-files").value = ""; document.querySelector("#project-file").value = "";
+      document.querySelector("#model-preview").classList.add("hidden"); renderModelFiles();
+    }
     if (event.target.name === "dimension_unit") updateDimensionLimits();
     if (["file_status", "dimension_length", "dimension_width", "dimension_height", "dimension_unit"].includes(event.target.name)) updateSplitConfirmation();
-    if (calculatedPayload) { calculatedPayload = null; calculatedResult = null; result.classList.add("hidden"); result.innerHTML = ""; }
+    invalidateEstimate();
   });
-  form.addEventListener("invalid", (event) => {
-    if (event.target.name === "service_intent") document.querySelector("#service-intent-error").textContent = "Choose 3D Design Only or 3D Design + 3D Printing.";
-    if (["dimension_length", "dimension_width", "dimension_height", "dimension_unit"].includes(event.target.name)) document.querySelector("#dimensions-error").textContent = dimensionValidationMessage();
-  }, true);
-  form.addEventListener("input", (event) => {
-    if (event.target.name === "service_intent") document.querySelector("#service-intent-error").textContent = "";
-    if (["dimension_length", "dimension_width", "dimension_height", "dimension_unit"].includes(event.target.name)) document.querySelector("#dimensions-error").textContent = "";
-    if (["dimension_length", "dimension_width", "dimension_height", "dimension_unit"].includes(event.target.name)) updateSplitConfirmation();
-  });
-  document.querySelector("#model-file").addEventListener("change", handleModelFile);
-  document.querySelector("#reference-images").addEventListener("change", updateReferenceImageStatus);
+  form.addEventListener("input", (event) => { if (["dimension_length", "dimension_width", "dimension_height", "dimension_unit"].includes(event.target.name)) updateSplitConfirmation(); });
+  document.querySelector("#model-files").addEventListener("change", async (event) => { try { await addModelFiles(event.target.files); event.target.value = ""; } catch (error) { document.querySelector("#model-upload-status").textContent = error.message; } });
+  document.querySelector("#project-file").addEventListener("change", async (event) => { try { await addModelFiles(event.target.files); } catch (error) { document.querySelector("#model-upload-status").textContent = error.message; } });
+  document.querySelector("#reference-images").addEventListener("change", () => { try { const files = validateReferenceImages(); document.querySelector("#reference-images-status").textContent = files.length ? `${files.length} reference image${files.length === 1 ? "" : "s"} ready.` : ""; } catch (error) { document.querySelector("#reference-images-status").textContent = error.message; } });
   form.addEventListener("submit", calculate);
-  updateConditionalFields();
+  renderModelFiles(); updateConditionalFields();
   (async function loadPublicOptions() {
     const button = form.querySelector('button[type="submit"]');
     const { data, error } = await client.rpc("get_print_estimator_public_options");
-    if (error) {
-      message.textContent = "The estimator is not configured yet. Please contact Mucci Products through Etsy.";
-      button.textContent = "Estimator unavailable";
-      return;
-    }
+    if (error) { message.textContent = "The estimator is not configured yet."; button.textContent = "Estimator unavailable"; return; }
     publicOptions = Array.isArray(data) ? data[0] : data;
     document.querySelector("#assembly-price").textContent = money(publicOptions.assembly_starting_price);
-    renderDesignOptions();
-    button.disabled = false;
-    button.textContent = "Calculate estimate";
+    renderDesignOptions(); button.disabled = false; button.textContent = "Calculate estimate";
   })();
 })();
