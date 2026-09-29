@@ -86,7 +86,7 @@
             </div>
             <label id="split-confirmation-row" class="split-confirmation hidden">
               <input type="checkbox" name="split_and_assembly_accepted" value="true" />
-              <span><b>I approve splitting and assembly.</b><small id="split-confirmation-help">This finished part is larger than the 250 × 250 × 250 mm print area. I understand the design may be divided into printable sections and assembled after printing.</small></span>
+              <span><b>I approve splitting and reassembly.</b><small id="split-confirmation-help">This finished part is larger than the 250 × 250 × 250 mm print area. I understand the design may be divided into printable sections and reassembled after printing. This approval does not select the significant assembly option below.</small></span>
             </label>
             <div id="model-preview" class="model-preview hidden" aria-label="Interactive 3D model preview">
               <div id="model-viewer"></div>
@@ -211,6 +211,6 @@
     <script src="https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js"></script>
     <script src="/estimator/mobile-menu.js"></script>
     <script src="/estimator/gcode-time.js"></script>
-    <script type="module" src="/estimator/estimator.js?v=advanced-print-settings-v1"></script>
+    <script type="module" src="/estimator/estimator.js?v=assembly-choice-fix-v1"></script>
   </body>
 </html>

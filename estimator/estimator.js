@@ -141,8 +141,8 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
     input.required = oversized;
     input.disabled = !oversized;
     document.querySelector("#split-confirmation-help").textContent = oversized
-      ? `This project needs approximately ${sections} printable section${sections === 1 ? "" : "s"} for the 250 × 250 × 250 mm print area. The estimator analyzes the complete geometry; exact cut and joint locations are confirmed during final review.`
-      : "This finished part is larger than the 250 × 250 × 250 mm print area. I understand the design may be divided into printable sections and assembled after printing.";
+      ? `This project needs approximately ${sections} printable section${sections === 1 ? "" : "s"} for the 250 × 250 × 250 mm print area. The estimator analyzes the complete geometry; exact cut and joint locations are confirmed during final review. This approval does not select the significant assembly option below.`
+      : "This finished part is larger than the 250 × 250 × 250 mm print area. I understand the design may be divided into printable sections and reassembled after printing. This approval does not select the significant assembly option below.";
     if (!oversized) input.checked = false;
   }
 
@@ -263,7 +263,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
       } : { enabled:false },
       material:physical ? values.material : null, colourCount:physical ? values.colour_count : "1",
       desiredColours:physical ? values.desired_colours.trim() : null, designLevel:values.design_level,
-      assemblyRequired:physical && (values.assembly_required === "true" || splitAccepted), splitAccepted,
+      assemblyRequired:physical && values.assembly_required === "true", splitAccepted,
       estimatedSectionCount:splitPlan?.sectionCount || (uploadedOversized ? uploadedSectionCount() : 1),
       modelLengthMm:dimensions?.x || Math.max(0, ...modelItems.map((item) => item.loaded?.dimensions?.x || 0)) || null,
       modelWidthMm:dimensions?.y || Math.max(0, ...modelItems.map((item) => item.loaded?.dimensions?.y || 0)) || null,

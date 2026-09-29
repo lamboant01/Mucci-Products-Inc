@@ -33,7 +33,7 @@ test("quote form presents required service and dimensions without changing exist
     "Yes, ready to print", "Yes, but it needs modifications", "No, I need a 3D model created",
     "What do you need?", "3D Design Only", "3D Design + 3D Printing",
     "Maximum finished dimensions", "Length", "Width", "Height", "Choose unit",
-    "I approve splitting and assembly", "Material and colours", "PLA", "PETG", "Wanted colours",
+    "I approve splitting and reassembly", "This approval does not select the significant assembly option below", "Material and colours", "PLA", "PETG", "Wanted colours",
     "closest available filament match based on current market availability",
     "Please choose honestly", "may change the selected design level and final price",
     "Be as specific as possible", "avoid delays caused by follow-up questions",
@@ -53,6 +53,8 @@ test("customer estimator separates design, preliminary printing, and total prici
   assert.match(source, /printProfile:values\.file_status === "design" \? "preliminary"/);
   assert.match(source, /splitDimensionsForPrint/);
   assert.match(source, /splitAccepted/);
+  assert.match(source, /assemblyRequired:physical && values\.assembly_required === "true"/);
+  assert.doesNotMatch(source, /assemblyRequired:[^\n]*\|\|[^\n]*splitAccepted/);
   assert.match(source, /sectionCount:uploadMode\(\) === "individual"/);
   assert.match(source, /Split approval required/);
   assert.doesNotMatch(source, /must fit within 250 × 250 × 250 mm/);
