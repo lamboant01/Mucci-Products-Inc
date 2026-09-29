@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const analysis = require("../api/_estimate-analysis");
 
 test("accepts slicer timing statistics even when assembled G-code is absent", async () => {
   const { slicerTimeSeconds } = await import("../estimator/slicer-result.mjs");
@@ -22,4 +23,17 @@ test("distinguishes a model with no printable material", async () => {
   const result = { stats:{ time_estimate:0, filament_mm:0, layer_times:[] }, gcode:"" };
   assert.equal(slicerFilamentLength(result), null);
   assert.equal(slicerTimeSeconds(result), null);
+});
+
+test("server analysis streams layers and converts WASM aborts into a safe error", () => {
+  let options;
+  const result = analysis.sliceForStatistics({
+    slice(_stl, _profile, received) { options = received; return { stats:{ time_estimate:60, filament_mm:100 } }; }
+  }, new Uint8Array([1]), {}, "large.3mf");
+  assert.equal(typeof options.onLayer, "function");
+  assert.equal(result.stats.time_estimate, 60);
+  assert.throws(
+    () => analysis.sliceForStatistics({ slice() { throw new Error("Aborted(). Build with -sASSERTIONS for more info."); } }, new Uint8Array([1]), {}, "49-parts.3mf"),
+    /too complex for automatic slicing/
+  );
 });

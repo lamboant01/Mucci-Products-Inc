@@ -96,6 +96,26 @@ function gramsFromLength(lengthMm, density) {
   return Math.PI * radiusCm * radiusCm * (Number(lengthMm) / 10) * density;
 }
 
+function sliceForStatistics(slicer, stl, profile, name) {
+  try {
+    // Quotes only need aggregate time and filament statistics. Discard each
+    // streamed layer so large multi-part projects do not retain the complete
+    // G-code and toolpath payload in server memory.
+    const result = slicer.slice(stl, profile, { onLayer:() => {} });
+    if (result?.error) throw new Error(result.error);
+    if (result?.warnings?.includes("over_bed_model")) throw new Error(`${name || "This model"} does not fit within the print area.`);
+    return result;
+  } catch (error) {
+    const detail = String(error?.message || error || "");
+    if (/aborted|memory|out of bounds|allocation/i.test(detail)) {
+      const safe = new Error(`${name || "This 3MF project"} is too complex for automatic slicing. Reduce the number of parts or submit the project for manual review through Etsy.`);
+      safe.statusCode = 422;
+      throw safe;
+    }
+    throw error;
+  }
+}
+
 async function analyze(config, rawRequest) {
   const request = validateRequest(rawRequest);
   if (request.serviceIntent === "DESIGN_ONLY") return { files:[], totalHours:0, totalGrams:0, plateCount:0, maxSinglePlateHours:0, manualReview:false };
@@ -127,7 +147,7 @@ async function analyze(config, rawRequest) {
         }
       }
       const stl = await privateFile(config, analysis.path, MAX_ANALYSIS_BYTES);
-      const sliced = slicer.slice(stl, profile);
+      const sliced = sliceForStatistics(slicer, stl, profile, input.name);
       const seconds = Number(sliced?.stats?.time_estimate);
       const filamentMm = Number(sliced?.stats?.filament_mm);
       if (!Number.isFinite(seconds) || seconds <= 0 || !Number.isFinite(filamentMm) || filamentMm <= 0) throw new Error(`${input.name || "A model"} could not be analyzed reliably.`);
@@ -175,4 +195,4 @@ async function price(config, request, analysis) {
   return Array.isArray(rows) ? rows[0] : rows;
 }
 
-module.exports = { analyze, configuration, price, projectPlateCount, requestBody, sign, storagePath, validateRequest, verify };
+module.exports = { analyze, configuration, price, projectPlateCount, requestBody, sign, sliceForStatistics, storagePath, validateRequest, verify };
