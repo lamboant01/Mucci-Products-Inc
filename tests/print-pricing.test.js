@@ -13,9 +13,10 @@ test("applies deterministic manufacturing risk tiers", () => {
 test("calculates the requested setup, time, material, plate and risk price", () => {
   const result = manufacturingPrice({ hours:78.55, grams:1676.56, plates:9 });
   assert.equal(result.setupCharge, 10);
-  assert.equal(result.subtotal, 908.19);
+  assert.equal(result.timeCharge, 235.65);
+  assert.equal(result.subtotal, 751.09);
   assert.equal(result.riskMultiplier, 1.15);
-  assert.equal(result.total, 1044.41);
+  assert.equal(result.total, 863.75);
 });
 
 test("enforces the 40 CAD manufacturing minimum", () => {

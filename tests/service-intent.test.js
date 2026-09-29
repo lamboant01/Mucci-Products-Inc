@@ -79,6 +79,12 @@ test("multi-file migration installs server pricing and submission RPCs", () => {
   assert.match(sql, /notify pgrst, 'reload schema'/);
 });
 
+test("hourly-rate migration lowers machine time to three dollars", () => {
+  const sql = read("supabase", "migrations", "022_manufacturing_hourly_rate.sql");
+  assert.match(sql, /hourly_production_factor = 3/);
+  assert.match(sql, /notify pgrst, 'reload schema'/);
+});
+
 test("database migration stores separate service pricing and preserves quantity behavior", () => {
   const sql = read("supabase", "migrations", "017_separate_design_and_print_estimates.sql");
   for (const value of ["DESIGN_ONLY", "DESIGN_AND_PRINT", "PRINT_ONLY", "MODIFY_AND_PRINT"]) assert.match(sql, new RegExp(value));

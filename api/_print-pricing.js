@@ -1,6 +1,6 @@
 "use strict";
 
-const RATES = Object.freeze({ setup:10, hourly:5, material:0.28, plate:4, minimum:40 });
+const RATES = Object.freeze({ setup:10, hourly:3, material:0.28, plate:4, minimum:40 });
 
 function finite(value, name, minimum = 0) {
   const number = Number(value);
