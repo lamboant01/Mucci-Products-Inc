@@ -74,18 +74,18 @@
             <div id="file-upload-row" class="conditional-panel model-upload-panel hidden">
               <p class="conditional-question">Upload 3D files <span>Required</span></p>
               <div class="choice-grid upload-mode-choices">
-                <label class="choice"><input type="radio" name="upload_mode" value="individual" checked /><span><b>Individual model files</b><small>Up to 20 STL, OBJ, STEP, or STP files</small></span></label>
+                <label class="choice"><input type="radio" name="upload_mode" value="individual" checked /><span><b>Individual model files</b><small>Up to 8 STL, OBJ, STEP, or STP files</small></span></label>
                 <label class="choice"><input type="radio" name="upload_mode" value="project" /><span><b>3MF project</b><small>One complete .3mf project</small></span></label>
               </div>
               <label id="individual-upload-row" class="field">Choose individual 3D files
                 <input id="model-files" type="file" multiple accept=".stl,.obj,.step,.stp" />
-                <small>Maximum 20 files and 25 MB per file. Set the required quantity beside each file.</small>
+                <small>Maximum 8 files and 25 MB per file. Set the required quantity beside each file.</small>
               </label>
               <label id="project-upload-row" class="field hidden">Choose one 3MF project
                 <input id="project-file" type="file" accept=".3mf" />
                 <small>One 3MF project containing one or more parts or plates, maximum 25 MB.</small>
               </label>
-              <div class="model-file-summary"><strong id="model-file-count">Files uploaded: 0 / 20</strong><span id="model-upload-status" role="status"></span></div>
+              <div class="model-file-summary"><strong id="model-file-count">Files uploaded: 0 / 8</strong><span id="model-upload-status" role="status"></span></div>
               <div id="model-file-list" class="model-file-list" aria-live="polite"></div>
             </div>
             <div id="model-preview" class="model-preview hidden" aria-label="Interactive 3D model preview">

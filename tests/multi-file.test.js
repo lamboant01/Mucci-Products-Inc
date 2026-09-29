@@ -3,10 +3,10 @@ const assert = require("node:assert/strict");
 
 const file = (name, size = 1024) => ({ name, size });
 
-test("accepts 20 individual uploads and rejects 21", async () => {
+test("accepts 8 individual uploads and rejects 9", async () => {
   const { validateUploadSelection } = await import("../estimator/multi-file.mjs");
-  assert.equal(validateUploadSelection(Array.from({ length:20 }, (_, index) => file(`${index}.stl`)), "individual").length, 20);
-  assert.throws(() => validateUploadSelection(Array.from({ length:21 }, (_, index) => file(`${index}.stl`)), "individual"), /between 1 and 20/);
+  assert.equal(validateUploadSelection(Array.from({ length:8 }, (_, index) => file(`${index}.stl`)), "individual").length, 8);
+  assert.throws(() => validateUploadSelection(Array.from({ length:9 }, (_, index) => file(`${index}.stl`)), "individual"), /between 1 and 8/);
 });
 
 test("accepts one 3MF project and rejects two or mixed model uploads", async () => {

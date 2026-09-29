@@ -6,7 +6,7 @@ const db = require("./_admin-supabase");
 const PATH_PATTERN = /^([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.(stl|3mf|obj|step|stp)$/;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 const MAX_ANALYSIS_BYTES = 60 * 1024 * 1024;
-const MAX_FILES = 20;
+const MAX_FILES = 8;
 
 function configuration() {
   const values = {
@@ -77,7 +77,7 @@ function validateRequest(value) {
   const files = Array.isArray(request.modelFiles) ? request.modelFiles : [];
   if (!["DESIGN_ONLY", "DESIGN_AND_PRINT", "PRINT_ONLY", "MODIFY_AND_PRINT"].includes(intent)) throw new Error("Invalid estimate service.");
   if (["PRINT_ONLY", "MODIFY_AND_PRINT"].includes(intent)) {
-    if (request.uploadMode === "individual" && (files.length < 1 || files.length > MAX_FILES)) throw new Error("Upload between 1 and 20 model files.");
+    if (request.uploadMode === "individual" && (files.length < 1 || files.length > MAX_FILES)) throw new Error("Upload between 1 and 8 model files.");
     if (request.uploadMode === "project" && (files.length !== 1 || !String(files[0]?.name || "").toLowerCase().endsWith(".3mf"))) throw new Error("Upload one 3MF project.");
     if (!["individual", "project"].includes(request.uploadMode)) throw new Error("Choose a model upload mode.");
   } else if (files.length) throw new Error("This design service does not accept an existing model upload.");

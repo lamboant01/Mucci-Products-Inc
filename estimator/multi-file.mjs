@@ -1,5 +1,5 @@
 export const MODEL_EXTENSIONS = Object.freeze(["stl", "obj", "step", "stp"]);
-export const MAX_MODEL_FILES = 20;
+export const MAX_MODEL_FILES = 8;
 
 const extension = (file) => String(file?.name || "").split(".").pop().toLowerCase();
 
