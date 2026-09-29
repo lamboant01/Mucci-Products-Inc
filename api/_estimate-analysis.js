@@ -97,14 +97,14 @@ function gramsFromLength(lengthMm, density) {
   return Math.PI * radiusCm * radiusCm * (Number(lengthMm) / 10) * density;
 }
 
-function sliceForStatistics(slicer, stl, profile, name) {
+function sliceForStatistics(slicer, stl, profile, name, options = {}) {
   try {
     // Quotes only need aggregate time and filament statistics. Discard each
     // streamed layer so large multi-part projects do not retain the complete
     // G-code and toolpath payload in server memory.
     const result = slicer.slice(stl, profile, { onLayer:() => {} });
     if (result?.error) throw new Error(result.error);
-    if (result?.warnings?.includes("over_bed_model")) throw new Error(`${name || "This model"} does not fit within the print area.`);
+    if (result?.warnings?.includes("over_bed_model") && !options.allowOverBed) throw new Error(`${name || "This model"} does not fit within the print area.`);
     return result;
   } catch (error) {
     const detail = String(error?.message || error || "");
@@ -144,7 +144,14 @@ async function analyze(config, rawRequest) {
       if (analysisFiles.some((analysis) => analysis.root !== root) || (original && original.root !== root)) throw new Error("All model files must belong to one private quote upload.");
       const quantity = Number(input.quantity || 1);
       if (!Number.isInteger(quantity) || quantity < 1 || quantity > 999) throw new Error("Each model quantity must be between 1 and 999.");
-      const platesPerProject = analysisFiles.length;
+      const sectionCount = Number(input.sectionCount || 1);
+      if (!Number.isInteger(sectionCount) || sectionCount < 1 || sectionCount > MAX_ANALYSIS_PLATES) throw new Error("Invalid printable section count.");
+      const splitAnalysis = sectionCount > analysisFiles.length;
+      if (splitAnalysis && request.splitAccepted !== true) throw new Error("Splitting and assembly approval is required for an oversized model.");
+      const platesPerProject = Math.max(analysisFiles.length, sectionCount);
+      analysisPlateCount += platesPerProject - analysisFiles.length;
+      if (analysisPlateCount > MAX_ANALYSIS_PLATES) throw new Error(`A project cannot exceed ${MAX_ANALYSIS_PLATES} automatically arranged print beds.`);
+      if (splitAnalysis) manualReview = true;
       if (original) {
         const originalBytes = await privateFile(config, original.path, MAX_FILE_BYTES);
         if (!originalBytes.length) throw new Error("The original model file is empty.");
@@ -152,7 +159,7 @@ async function analyze(config, rawRequest) {
       let seconds = 0, filamentMm = 0, longestSeconds = 0;
       for (let plateIndex = 0; plateIndex < analysisFiles.length; plateIndex += 1) {
         const stl = await privateFile(config, analysisFiles[plateIndex].path, MAX_ANALYSIS_BYTES);
-        const sliced = sliceForStatistics(slicer, stl, profile, `${input.name || "Model"} bed ${plateIndex + 1}`);
+        const sliced = sliceForStatistics(slicer, stl, profile, `${input.name || "Model"} bed ${plateIndex + 1}`, { allowOverBed:splitAnalysis });
         const plateSeconds = Number(sliced?.stats?.time_estimate);
         const plateFilamentMm = Number(sliced?.stats?.filament_mm);
         if (!Number.isFinite(plateSeconds) || plateSeconds <= 0 || !Number.isFinite(plateFilamentMm) || plateFilamentMm <= 0) throw new Error(`${input.name || "A model"} could not be analyzed reliably.`);
@@ -165,8 +172,8 @@ async function analyze(config, rawRequest) {
       analyses.push({
         path:original?.path || null, analysis_path:analysisFiles[0].path, analysis_paths:analysisFiles.map((analysis) => analysis.path), name:String(input.name || "Model").slice(0, 255),
         size_bytes:Number(input.sizeBytes || 0), quantity, hours:Number(hours.toFixed(4)), grams:Number(grams.toFixed(3)),
-        plate_count:platesPerProject, max_single_plate_hours:Number((longestSeconds / 3600).toFixed(4)),
-        analysis_status:"ready"
+        plate_count:platesPerProject, max_single_plate_hours:splitAnalysis ? null : Number((longestSeconds / 3600).toFixed(4)),
+        analysis_status:splitAnalysis ? "manual_cut_plan" : "ready"
       });
     }
   } finally {

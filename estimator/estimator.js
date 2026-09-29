@@ -36,6 +36,11 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
   const uploadMode = () => selected("upload_mode") || "individual";
   const formatSize = (bytes) => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   const dimensionValues = () => ({ length:form.elements.dimension_length.value, width:form.elements.dimension_width.value, height:form.elements.dimension_height.value, unit:form.elements.dimension_unit.value });
+  const modelSectionPlan = (item) => item?.loaded?.dimensions ? splitDimensionsForPrint(item.loaded.dimensions, maxModelDimensionMm) : null;
+  const oversizedModelItems = () => uploadMode() === "individual"
+    ? modelItems.filter((item) => item.loaded && requiresPrintSplitting(item.loaded.dimensions, maxModelDimensionMm))
+    : [];
+  const uploadedSectionCount = () => modelItems.reduce((sum, item) => sum + (modelSectionPlan(item)?.sectionCount || 1) * Number(item.quantity || 1), 0);
 
   async function api(endpoint, body) {
     const response = await fetch(endpoint, { method:"POST", credentials:"same-origin", headers:{ "Content-Type":"application/json" }, body:JSON.stringify(body) });
@@ -105,10 +110,23 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
     const row = document.querySelector("#split-confirmation-row");
     const input = form.elements.split_and_assembly_accepted;
     let oversized = false;
-    if (selected("file_status") === "design") { try { oversized = requiresPrintSplitting(dimensionsToMm(dimensionValues(), maxFinishedDimensionMm), maxModelDimensionMm); } catch (_) {} }
+    let sections = 1;
+    if (selected("file_status") === "design") {
+      try {
+        const plan = splitDimensionsForPrint(dimensionsToMm(dimensionValues(), maxFinishedDimensionMm), maxModelDimensionMm);
+        oversized = plan.sectionCount > 1;
+        sections = plan.sectionCount;
+      } catch (_) {}
+    } else if (["ready", "modify"].includes(selected("file_status"))) {
+      oversized = oversizedModelItems().length > 0;
+      sections = uploadedSectionCount();
+    }
     row.classList.toggle("hidden", !oversized);
     input.required = oversized;
-    input.disabled = selected("file_status") !== "design";
+    input.disabled = !oversized;
+    document.querySelector("#split-confirmation-help").textContent = oversized
+      ? `This project needs approximately ${sections} printable section${sections === 1 ? "" : "s"} for the 250 × 250 × 250 mm print area. The estimator analyzes the complete geometry; exact cut and joint locations are confirmed during final review.`
+      : "This finished part is larger than the 250 × 250 × 250 mm print area. I understand the design may be divided into printable sections and assembled after printing.";
     if (!oversized) input.checked = false;
   }
 
@@ -121,7 +139,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
       <button class="model-file-remove" type="button" data-remove-file="${escapeHtml(item.id)}">Remove</button></article>`).join("");
     document.querySelectorAll("[data-remove-file]").forEach((button) => button.addEventListener("click", () => {
       modelItems = removeUpload(modelItems, button.dataset.removeFile);
-      renderModelFiles(); invalidateEstimate();
+      renderModelFiles(); updateSplitConfirmation(); invalidateEstimate();
       if (!modelItems.length) document.querySelector("#model-preview").classList.add("hidden");
     }));
     document.querySelectorAll("[data-file-quantity]").forEach((input) => input.addEventListener("change", () => {
@@ -130,6 +148,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
       if (!input.reportValidity()) return;
       const item = modelItems.find((candidate) => candidate.id === input.dataset.fileQuantity);
       if (item) item.quantity = quantity;
+      updateSplitConfirmation();
       invalidateEstimate();
     }));
   }
@@ -146,13 +165,16 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
       try {
         item.loaded = modelItems[0] === item ? await loadAndPreviewModel(item.file, document.querySelector("#model-viewer")) : await loadModelForSlicing(item.file);
         const { x, y, z } = item.loaded.dimensions;
-        if (mode === "individual" && Math.max(x, y, z) > maxModelDimensionMm) throw validationError(`${item.file.name} must fit within 250 × 250 × 250 mm.`);
+        const sectionPlan = modelSectionPlan(item);
         item.status = mode === "project"
           ? `${item.loaded.objectCount} project group${item.loaded.objectCount === 1 ? "" : "s"} · ${item.loaded.plateCount} auto-arranged A1 bed${item.loaded.plateCount === 1 ? "" : "s"} · largest ${x.toFixed(1)} × ${y.toFixed(1)} × ${z.toFixed(1)} mm · Ready`
-          : `${x.toFixed(1)} × ${y.toFixed(1)} × ${z.toFixed(1)} mm · Ready`;
+          : sectionPlan.sectionCount > 1
+            ? `${x.toFixed(1)} × ${y.toFixed(1)} × ${z.toFixed(1)} mm · approximately ${sectionPlan.sectionCount} printable sections · Split approval required`
+            : `${x.toFixed(1)} × ${y.toFixed(1)} × ${z.toFixed(1)} mm · Ready`;
       } catch (error) { item.status = error.message || "Analysis failed"; item.loaded = null; }
       renderModelFiles();
     }
+    updateSplitConfirmation();
     document.querySelector("#model-upload-status").textContent = modelItems.every((item) => item.loaded) ? "All selected models are ready." : "One or more models could not be prepared.";
     document.querySelector("#model-preview").classList.toggle("hidden", !modelItems.some((item) => item.loaded));
     document.querySelector("#model-status").textContent = modelItems[0]?.status || "";
@@ -163,6 +185,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
     if (!["ready", "modify"].includes(selected("file_status"))) return [];
     validateUploadSelection(modelItems.map((item) => item.file), uploadMode(), maxFileBytes);
     if (modelItems.some((item) => !item.loaded)) throw validationError("Every selected model must finish preparing before pricing.");
+    if (oversizedModelItems().length && !form.elements.split_and_assembly_accepted.checked) throw validationError("Confirm that splitting and assembly is acceptable for the oversized model.");
     if (modelItems.some((item) => !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 999)) throw validationError("Each model quantity must be between 1 and 999.");
     if (modelItems.reduce((sum, item) => sum + item.quantity, 0) > 999) throw validationError("The combined model quantity cannot exceed 999 items.");
     return modelItems;
@@ -208,7 +231,8 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
     const intent = resolveServiceIntent(values.file_status, values.service_intent);
     const physical = includesPhysicalPrinting(intent);
     const splitPlan = dimensions ? splitDimensionsForPrint(dimensions, maxModelDimensionMm) : null;
-    const splitAccepted = Boolean(splitPlan?.sectionCount > 1 && values.split_and_assembly_accepted === "true");
+    const uploadedOversized = !dimensions && oversizedModelItems().length > 0;
+    const splitAccepted = Boolean((splitPlan?.sectionCount > 1 || uploadedOversized) && values.split_and_assembly_accepted === "true");
     const quantity = ["ready", "modify"].includes(values.file_status) ? modelItems.reduce((sum, item) => sum + item.quantity, 0) : intent === SERVICE_INTENTS.DESIGN_ONLY ? 1 : Number(values.quantity);
     return {
       fileStatus:values.file_status, serviceIntent:intent,
@@ -217,14 +241,14 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
       material:physical ? values.material : null, colourCount:physical ? values.colour_count : "1",
       desiredColours:physical ? values.desired_colours.trim() : null, designLevel:values.design_level,
       assemblyRequired:physical && (values.assembly_required === "true" || splitAccepted), splitAccepted,
-      estimatedSectionCount:splitPlan?.sectionCount || 1,
+      estimatedSectionCount:splitPlan?.sectionCount || (uploadedOversized ? uploadedSectionCount() : 1),
       modelLengthMm:dimensions?.x || Math.max(0, ...modelItems.map((item) => item.loaded?.dimensions?.x || 0)) || null,
       modelWidthMm:dimensions?.y || Math.max(0, ...modelItems.map((item) => item.loaded?.dimensions?.y || 0)) || null,
       modelHeightMm:dimensions?.z || Math.max(0, ...modelItems.map((item) => item.loaded?.dimensions?.z || 0)) || null,
       submittedLength:dimensions ? Number(values.dimension_length) : null, submittedWidth:dimensions ? Number(values.dimension_width) : null,
       submittedHeight:dimensions ? Number(values.dimension_height) : null, dimensionUnit:dimensions ? values.dimension_unit : null,
       shipping:0,
-      modelFiles:modelItems.map((item) => ({ path:item.path, analysisPath:item.analysisPath, analysisPaths:item.analysisPaths, name:item.file.name, sizeBytes:item.file.size, quantity:item.quantity }))
+      modelFiles:modelItems.map((item) => ({ path:item.path, analysisPath:item.analysisPath, analysisPaths:item.analysisPaths, sectionCount:uploadMode() === "individual" ? modelSectionPlan(item)?.sectionCount || 1 : 1, name:item.file.name, sizeBytes:item.file.size, quantity:item.quantity }))
     };
   }
 
@@ -313,7 +337,7 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
       document.querySelector("#individual-upload-row").classList.toggle("hidden", uploadMode() !== "individual");
       document.querySelector("#project-upload-row").classList.toggle("hidden", uploadMode() !== "project");
       document.querySelector("#model-files").value = ""; document.querySelector("#project-file").value = "";
-      document.querySelector("#model-preview").classList.add("hidden"); renderModelFiles();
+      document.querySelector("#model-preview").classList.add("hidden"); renderModelFiles(); updateSplitConfirmation();
     }
     if (event.target.name === "dimension_unit") updateDimensionLimits();
     if (["file_status", "dimension_length", "dimension_width", "dimension_height", "dimension_unit"].includes(event.target.name)) updateSplitConfirmation();

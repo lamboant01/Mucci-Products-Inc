@@ -53,6 +53,9 @@ test("customer estimator separates design, preliminary printing, and total prici
   assert.match(source, /printProfile:values\.file_status === "design" \? "preliminary"/);
   assert.match(source, /splitDimensionsForPrint/);
   assert.match(source, /splitAccepted/);
+  assert.match(source, /sectionCount:uploadMode\(\) === "individual"/);
+  assert.match(source, /Split approval required/);
+  assert.doesNotMatch(source, /must fit within 250 × 250 × 250 mm/);
   assert.match(source, /form\.elements\.desired_colours\.required = includesPhysicalPrinting/);
   assert.match(source, /desiredColours/);
   assert.match(source, /material:physical/);
