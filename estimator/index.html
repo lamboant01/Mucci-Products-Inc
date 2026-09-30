@@ -67,6 +67,27 @@
               </div>
               <p id="dimensions-error" class="field-error" role="alert"></p>
             </div>
+            <div id="intended-use-row" class="conditional-panel hidden">
+              <p class="conditional-question">Project details <span>Required</span></p>
+              <label class="field">Project category <small>Optional</small>
+                <select name="application_category">
+                  <option value="">Choose a category if one fits</option>
+                  <option value="organizer_tray">Organizer / Tray</option>
+                  <option value="box_enclosure">Box / Enclosure</option>
+                  <option value="holder_mount">Holder / Mount</option>
+                  <option value="replacement_part">Replacement Part</option>
+                  <option value="bracket_structural">Bracket / Structural Part</option>
+                  <option value="decorative_item">Decorative Item</option>
+                  <option value="prototype">Prototype</option>
+                  <option value="sign_display">Sign / Display</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label class="field">What are you making, and how will it be used?
+                <textarea name="application_description" rows="4" maxlength="1000" placeholder="Drawer organizer for utensils with several compartments"></textarea>
+                <small>Briefly describe the object, its purpose, and whether it needs to support weight or withstand force.</small>
+              </label>
+            </div>
             <div id="file-upload-row" class="conditional-panel model-upload-panel hidden">
               <p class="conditional-question">Upload 3D files <span>Required</span></p>
               <div class="choice-grid upload-mode-choices">
@@ -211,6 +232,6 @@
     <script src="https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js"></script>
     <script src="/estimator/mobile-menu.js"></script>
     <script src="/estimator/gcode-time.js"></script>
-    <script type="module" src="/estimator/estimator.js?v=assembly-choice-fix-v1"></script>
+    <script type="module" src="/estimator/estimator.js?v=intended-use-estimate-v1"></script>
   </body>
 </html>

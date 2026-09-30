@@ -38,6 +38,7 @@ test("quote form presents required service and dimensions without changing exist
     "Please choose honestly", "may change the selected design level and final price",
     "Be as specific as possible", "avoid delays caused by follow-up questions",
     "Reference images", "Up to 10 images", "10 MB each"
+    , "What are you making, and how will it be used", "Project category", "Organizer / Tray", "Briefly describe the object"
   ]) assert.match(html, new RegExp(phrase.replace(/[+]/g, "\\+")));
   assert.match(html, /name="service_intent" value="DESIGN_ONLY"/);
   assert.match(html, /name="service_intent" value="DESIGN_AND_PRINT"/);
@@ -66,6 +67,9 @@ test("customer estimator separates design, preliminary printing, and total prici
   assert.match(source, /referenceFiles/);
   assert.match(source, /modelFiles/);
   assert.match(source, /manufacturing_total/);
+  assert.match(source, /applicationDescription/);
+  assert.match(source, /manufacturingAssumptions/);
+  assert.match(source, /Because no printable 3D file was provided/);
   assert.match(source, /Shipping is calculated separately/);
 });
 
@@ -87,6 +91,16 @@ test("multi-file migration installs server pricing and submission RPCs", () => {
 test("hourly-rate migration lowers machine time to three dollars", () => {
   const sql = read("supabase", "migrations", "022_manufacturing_hourly_rate.sql");
   assert.match(sql, /hourly_production_factor = 3/);
+  assert.match(sql, /notify pgrst, 'reload schema'/);
+});
+
+test("intended-use migration stores assumptions and removes no-file plate and risk surcharges", () => {
+  const sql = read("supabase", "migrations", "023_intended_use_preliminary_estimates.sql");
+  for (const column of ["application_category", "application_description", "ai_geometry_classification", "geometry_utilization_factor", "recommended_infill_percent", "recommended_wall_loops", "recommended_top_bottom_layers", "estimation_method"]) assert.match(sql, new RegExp(column));
+  assert.match(sql, /p_request ->> 'fileStatus' = 'design'/);
+  assert.match(sql, /risk_multiplier := 1/);
+  assert.match(sql, /plate_charge := 0/);
+  assert.match(sql, /manufacturingAssumptions/);
   assert.match(sql, /notify pgrst, 'reload schema'/);
 });
 

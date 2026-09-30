@@ -90,8 +90,12 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
     document.querySelector("#model-preview").classList.toggle("hidden", !usesModel || !modelItems.some((item) => item.loaded));
     document.querySelector("#service-intent-row").classList.toggle("hidden", !noFile);
     document.querySelector("#dimensions-row").classList.toggle("hidden", !noFile);
+    document.querySelector("#intended-use-row").classList.toggle("hidden", !noFile);
     form.querySelectorAll('[name="service_intent"]').forEach((input) => { input.required = noFile; input.disabled = !noFile; });
     ["dimension_length", "dimension_width", "dimension_height", "dimension_unit"].forEach((name) => { form.elements[name].required = noFile; form.elements[name].disabled = !noFile; });
+    form.elements.application_description.required = noFile;
+    form.elements.application_description.disabled = !noFile;
+    form.elements.application_category.disabled = !noFile;
     document.querySelector("#quantity-section").classList.toggle("hidden", usesModel || designOnly);
     document.querySelector("#print-profile-section").classList.toggle("hidden", noFile);
     document.querySelector("#colour-section").classList.toggle("hidden", designOnly);
@@ -253,6 +257,8 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
     const advancedSettingsEnabled = values.advanced_settings_enabled === "true";
     return {
       fileStatus:values.file_status, serviceIntent:intent,
+      applicationCategory:values.file_status === "design" ? values.application_category || null : null,
+      applicationDescription:values.file_status === "design" ? values.application_description.trim() : null,
       uploadMode:["ready", "modify"].includes(values.file_status) ? uploadMode() : intent === SERVICE_INTENTS.DESIGN_AND_PRINT ? "virtual" : null,
       uploadRoot, quantity, printProfile:values.file_status === "design" ? "preliminary" : values.print_profile,
       advancedSettings:advancedSettingsEnabled ? {
@@ -308,12 +314,25 @@ import { SERVICE_INTENTS, dimensionsToMm, includesPhysicalPrinting, requiresPrin
   function renderEstimate(estimate, analysis) {
     const intent = calculatedRequest.serviceIntent;
     const design = Number(estimate.design_fee || 0), assembly = Number(estimate.assembly_fee || 0), shipping = Number(estimate.shipping || 0);
-    const projectWarning = analysis.manualReview ? '<p class="notice"><strong>Manual plate confirmation required.</strong> This 3MF contains multiple plate references. Mucci Products will verify the separate plate times before final pricing.</p>' : "";
+    const assumptions = analysis.manufacturingAssumptions;
+    const geometryLabels = { open_tray:"Open tray / organizer", enclosure:"Box / enclosure", thin_shell:"Thin shell / display", holder:"Holder / mount", bracket:"Bracket", structural:"Structural part", decorative:"Decorative object", mostly_solid:"Mostly solid part", unknown:"General-purpose part" };
+    const categoryLabels = { organizer_tray:"Organizer / Tray", box_enclosure:"Box / Enclosure", holder_mount:"Holder / Mount", replacement_part:"Replacement Part", bracket_structural:"Bracket / Structural Part", decorative_item:"Decorative Item", prototype:"Prototype", sign_display:"Sign / Display", other:"Other" };
+    const setupSummary = assumptions && intent !== SERVICE_INTENTS.DESIGN_ONLY
+      ? `<section class="estimate-assumptions" aria-label="Preliminary manufacturing assumptions"><h3>Recommended print setup</h3><p><strong>${escapeHtml(assumptions.recommendedInfillPercent)}% infill · ${escapeHtml(assumptions.wallLoops)} walls</strong></p><p>Estimated construction: ${escapeHtml(categoryLabels[assumptions.category] || "Uncategorized")} / ${escapeHtml(geometryLabels[assumptions.geometryType] || assumptions.geometryType)}</p></section>`
+      : "";
+    const projectWarning = analysis.manualReview
+      ? calculatedRequest.fileStatus === "design"
+        ? '<p class="notice"><strong>May require printing in multiple sections.</strong> Exact cut, joint, and assembly details will be confirmed during final review.</p>'
+        : '<p class="notice"><strong>Manual plate confirmation required.</strong> Mucci Products will verify the separate plate times before final pricing.</p>'
+      : "";
     const shippingDisplay = shipping
       ? `<div><dt>Shipping</dt><dd>${escapeHtml(money(shipping))} CAD</dd></div>`
       : '<p class="shipping-note">Shipping is calculated separately once the destination and package details are confirmed.</p>';
     result.classList.remove("hidden");
-    result.innerHTML = `<p class="eyebrow">Your estimate is ready</p><h2>Estimate breakdown</h2><dl class="quote-breakdown"><div><dt>Service</dt><dd>${escapeHtml(serviceLabel(intent))}</dd></div>${intent === SERVICE_INTENTS.DESIGN_ONLY ? "" : `<div><dt>Estimated material</dt><dd>~${escapeHtml(Math.round(Number(analysis.totalGrams)))} g</dd></div><div><dt>Manufacturing estimate</dt><dd>${escapeHtml(money(estimate.manufacturing_total))} CAD</dd></div>`}${design ? `<div><dt>Design</dt><dd>${escapeHtml(money(design))} CAD</dd></div>` : ""}${assembly ? `<div><dt>Assembly</dt><dd>${escapeHtml(money(assembly))} CAD</dd></div>` : ""}${shipping ? shippingDisplay : ""}<div class="quote-total"><dt>Estimated total</dt><dd>${escapeHtml(money(estimate.estimated_total_max))} CAD</dd></div></dl>${shipping ? "" : shippingDisplay}${projectWarning}${estimate.requires_manual_review ? '<p class="notice"><strong>Review required.</strong> Final pricing will be confirmed after project review.</p>' : ""}<section class="estimate-disclaimer" aria-labelledby="estimate-disclaimer-title"><h3 id="estimate-disclaimer-title">About this estimate</h3><p>This is an automated estimate based on the uploaded 3D files and selected options. Final pricing is confirmed after Mucci Products reviews the files for printability, sizing, material requirements and production setup. Changes to the files, quantity, material, colour or requested specifications may require a revised quote. Shipping and applicable taxes are not included unless shown above.</p><p>Submitting this estimate does not place an order or begin production. We’ll review your project and confirm the final quote before payment.</p></section><div class="result-actions"><button id="submit-estimate" class="primary-button" type="button">REQUEST FINAL QUOTE</button></div><p id="submit-message" role="alert"></p>`;
+    const estimateBasis = calculatedRequest.fileStatus === "design"
+      ? "Because no printable 3D file was provided, material and print time are estimated from the dimensions and intended use. Final pricing is confirmed after the design is prepared."
+      : "This is an automated estimate based on the uploaded 3D files and selected options.";
+    result.innerHTML = `<p class="eyebrow">Your estimate is ready</p><h2>Estimate breakdown</h2><dl class="quote-breakdown"><div><dt>Service</dt><dd>${escapeHtml(serviceLabel(intent))}</dd></div>${intent === SERVICE_INTENTS.DESIGN_ONLY ? "" : `<div><dt>Estimated material</dt><dd>~${escapeHtml(Math.round(Number(analysis.totalGrams)))} g</dd></div><div><dt>Manufacturing estimate</dt><dd>${escapeHtml(money(estimate.manufacturing_total))} CAD</dd></div>`}${design ? `<div><dt>Design</dt><dd>${escapeHtml(money(design))} CAD</dd></div>` : ""}${assembly ? `<div><dt>Assembly</dt><dd>${escapeHtml(money(assembly))} CAD</dd></div>` : ""}${shipping ? shippingDisplay : ""}<div class="quote-total"><dt>Estimated total</dt><dd>${escapeHtml(money(estimate.estimated_total_max))} CAD</dd></div></dl>${shipping ? "" : shippingDisplay}${setupSummary}${projectWarning}${estimate.requires_manual_review ? '<p class="notice"><strong>Review required.</strong> Final pricing will be confirmed after project review.</p>' : ""}<section class="estimate-disclaimer" aria-labelledby="estimate-disclaimer-title"><h3 id="estimate-disclaimer-title">About this estimate</h3><p>${escapeHtml(estimateBasis)} Final pricing is confirmed after Mucci Products reviews the project for printability, sizing, material requirements and production setup. Changes to the files, quantity, material, colour or requested specifications may require a revised quote. Shipping and applicable taxes are not included unless shown above.</p><p>Submitting this estimate does not place an order or begin production. We’ll review your project and confirm the final quote before payment.</p></section><div class="result-actions"><button id="submit-estimate" class="primary-button" type="button">REQUEST FINAL QUOTE</button></div><p id="submit-message" role="alert"></p>`;
     document.querySelector("#submit-estimate").addEventListener("click", submitEstimate);
     result.scrollIntoView({ behavior:"smooth", block:"start" });
   }

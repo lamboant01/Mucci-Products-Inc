@@ -165,6 +165,16 @@
       ["File status", label(estimate.file_status)], ["Uploaded file", estimate.original_file_name || (estimate.file_path ? "Uploaded model" : "Not provided")],
       ["Reference images", `${Array.isArray(estimate.reference_files) ? estimate.reference_files.length : 0} attached`],
       ["Dimensions", dimensions],
+      ...(estimate.file_status === "design" ? [
+        ["Project category", label(estimate.application_category || "other")],
+        ["Intended use", estimate.application_description || "Not recorded"],
+        ["Estimated construction", label(estimate.ai_geometry_classification || "unknown")],
+        ["Geometry utilization factor", estimate.geometry_utilization_factor == null ? "Not recorded" : `${(Number(estimate.geometry_utilization_factor) * 100).toFixed(1)}%`],
+        ["Recommended infill", estimate.recommended_infill_percent == null ? "Not recorded" : `${Number(estimate.recommended_infill_percent)}%`],
+        ["Recommended wall loops", estimate.recommended_wall_loops ?? "Not recorded"],
+        ["Recommended top/bottom layers", estimate.recommended_top_bottom_layers ?? "Not recorded"],
+        ["Estimate method", estimate.estimation_method === "ai" ? "AI classified" : estimate.estimation_method === "fallback" ? "Deterministic fallback" : "Not recorded"]
+      ] : []),
       ["Split and assembly approved", estimate.split_and_assembly_accepted ? `Yes — approximately ${Number(estimate.estimated_section_count || 1)} printable sections` : "Not required"],
       ["Design level", label(estimate.design_level)]
     ];

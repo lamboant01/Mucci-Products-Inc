@@ -2,6 +2,7 @@
 
 const crypto = require("node:crypto");
 const db = require("./_admin-supabase");
+const noFileEstimator = require("./_no-file-estimator");
 
 const PATH_PATTERN = /^([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.(stl|3mf|obj|step|stp)$/;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
@@ -14,7 +15,9 @@ function configuration() {
   const values = {
     supabaseUrl:String(process.env.SUPABASE_URL || "").replace(/\/$/, ""),
     serviceKey:process.env.SUPABASE_SERVICE_ROLE_KEY,
-    siteUrl:String(process.env.PUBLIC_SITE_URL || "https://mucciproducts.com").replace(/\/$/, "")
+    siteUrl:String(process.env.PUBLIC_SITE_URL || "https://mucciproducts.com").replace(/\/$/, ""),
+    openaiKey:process.env.OPENAI_API_KEY || "",
+    openaiModel:process.env.OPENAI_ESTIMATOR_MODEL || "gpt-6-luna"
   };
   if (!values.supabaseUrl || !values.serviceKey) throw Object.assign(new Error("Estimate analysis is not configured."), { statusCode:503 });
   return values;
@@ -83,6 +86,15 @@ function validateRequest(value) {
     if (request.uploadMode === "project" && (files.length !== 1 || !String(files[0]?.name || "").toLowerCase().endsWith(".3mf"))) throw new Error("Upload one 3MF project.");
     if (!["individual", "project"].includes(request.uploadMode)) throw new Error("Choose a model upload mode.");
   } else if (files.length) throw new Error("This design service does not accept an existing model upload.");
+  if (request.fileStatus === "design") {
+    const description = String(request.applicationDescription || "").trim();
+    const category = String(request.applicationCategory || "");
+    if (!description) throw new Error("Describe what you are making and how it will be used.");
+    if (description.length > 1000) throw new Error("The intended-use description must be 1000 characters or fewer.");
+    if (category && !noFileEstimator.CATEGORIES.has(category)) throw new Error("Choose a valid project category.");
+    request.applicationDescription = description;
+    request.applicationCategory = category || null;
+  }
   if (files.length && new Set(files.map((file) => file.path)).size !== files.length) throw new Error("Duplicate model upload path.");
   return { ...request, modelFiles:files };
 }
@@ -143,6 +155,14 @@ function sliceForStatistics(slicer, stl, profile, name, options = {}) {
 
 async function analyze(config, rawRequest) {
   const request = validateRequest(rawRequest);
+  if (request.fileStatus === "design") {
+    const assumptions = await noFileEstimator.classifyNoFilePart(config, request);
+    if (request.serviceIntent === "DESIGN_ONLY") return {
+      files:[], totalHours:0, totalGrams:0, plateCount:0, maxSinglePlateHours:0, manualReview:false,
+      manufacturingAssumptions:noFileEstimator.safeAssumptions(assumptions)
+    };
+    return noFileEstimator.estimateNoFileManufacturing(request, assumptions);
+  }
   if (request.serviceIntent === "DESIGN_ONLY") return { files:[], totalHours:0, totalGrams:0, plateCount:0, maxSinglePlateHours:0, manualReview:false };
   const inputs = request.modelFiles.length ? request.modelFiles : request.virtualModels;
   if (!Array.isArray(inputs) || !inputs.length) throw new Error("No printable analysis geometry was supplied.");

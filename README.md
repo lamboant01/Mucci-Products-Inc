@@ -61,10 +61,17 @@ on the pinned Three.js and OCCT browser modules. The AGPL Three Slicer engine,
 its licence, and its third-party notices are kept under
 `estimator/vendor/three-slicer/` so the worker does not depend on a remote path.
 
-Run migrations 004 through 020 in order after migrations 001 through 003. All
+Run migrations 004 through 023 in order after migrations 001 through 003. All
 private pricing values and fallback-time assumptions are centralized in
 the single-row `print_estimator_config` table created by that migration. Update
 that row in Supabase to change pricing without editing the public website.
+
+No-file preliminary manufacturing estimates can classify the customer’s
+intended use through the server-side OpenAI Responses API. Configure
+`OPENAI_API_KEY` as a server-only Vercel environment variable. The optional
+`OPENAI_ESTIMATOR_MODEL` variable overrides the default `gpt-6-luna` model.
+When OpenAI is unavailable or returns unsafe data, the estimator uses bounded,
+deterministic category defaults; estimate submission remains available.
 
 Submitted estimates can send a one-time owner notification through the Vercel
 function at `/api/estimate-notification`. Configure `SUPABASE_URL`,
