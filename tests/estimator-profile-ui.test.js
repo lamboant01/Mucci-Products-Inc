@@ -16,6 +16,8 @@ test("customer estimate hides internal pricing logic and requests a final quote"
   const source = fs.readFileSync(path.join(__dirname, "..", "estimator", "estimator.js"), "utf8");
   assert.doesNotMatch(source, /Estimated print time/);
   assert.match(source, /Estimated material/);
+  assert.match(source, /<dt>Quantity<\/dt>/);
+  assert.match(source, /g.*total/);
   assert.match(source, /Manufacturing estimate/);
   assert.match(source, /About this estimate/);
   assert.match(source, /REQUEST FINAL QUOTE/);

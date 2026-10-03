@@ -146,7 +146,8 @@ function estimateNoFileManufacturing(request, assumptions) {
   const complexity = ({ light:0.90, normal:1, strong:1.10, structural:1.18 })[assumptions.strengthLevel];
   const heightFactor = 1 + clamp(z / 500, 0, 0.35);
   const colourFactor = 1 + Math.max(0, Number(request.colourCount || 1) - 1) * 0.06;
-  const totalHours = Math.max(0.35, (totalGrams / 18) * complexity * heightFactor * colourFactor + sections * quantity * 0.08);
+  const hoursPerItem = Math.max(0.35, (gramsPerItem / 18) * complexity * heightFactor * colourFactor + sections * 0.08);
+  const totalHours = hoursPerItem * quantity;
   const analyzedQuantity = sections * quantity;
   const virtual = Array.isArray(request.virtualModels) ? request.virtualModels[0] : null;
   if (!virtual?.analysisPath) throw new Error("No preliminary analysis reference was supplied.");

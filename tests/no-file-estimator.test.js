@@ -43,6 +43,20 @@ test("C: decorative item receives low infill and bounded utilization", () => {
   assert.ok(assumptions.geometryUtilizationFactor >= 0.15 && assumptions.geometryUtilizationFactor <= 0.40);
 });
 
+test("small identical items apply the minimum production allowance to every requested item", () => {
+  const singleRequest = baseRequest({
+    applicationCategory:"decorative_item", applicationDescription:"Bear claw, long and thin.",
+    modelLengthMm:5, modelWidthMm:7.5, modelHeightMm:40, estimatedSectionCount:1
+  });
+  const batchRequest = { ...singleRequest, quantity:28 };
+  const assumptions = estimator.fallbackClassification(singleRequest);
+  const single = estimator.estimateNoFileManufacturing(singleRequest, assumptions);
+  const batch = estimator.estimateNoFileManufacturing(batchRequest, assumptions);
+  assert.equal(batch.files[0].quantity, 28);
+  assert.ok(Math.abs(batch.totalGrams - single.totalGrams * 28) < 0.02);
+  assert.equal(batch.totalHours, Number((single.totalHours * 28).toFixed(4)));
+});
+
 test("D: unavailable AI uses deterministic intended-use fallback", async () => {
   const assumptions = await estimator.classifyNoFilePart({ openaiKey:"test", openaiModel:"test" }, baseRequest(), async () => { throw new Error("network unavailable"); });
   assert.equal(assumptions.source, "fallback");
