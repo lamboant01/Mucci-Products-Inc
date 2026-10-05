@@ -243,6 +243,22 @@ private in the `print-estimate-files` Storage bucket. The browser receives only
 short-lived signed URLs after the authorized administrator requests a specific
 file belonging to a specific project.
 
+Migration `026_admin_order_workflow.sql` upgrades that section into the Mucci
+order operations workspace without replacing the estimate lifecycle. It adds a
+separate `internal_status`, `internal_status_updated_at`, short-lived persisted
+Shopify read-cache fields, and the server-private `admin_order_events` table.
+Existing estimate rows are not backfilled or rewritten; a paid order without an
+internal status is displayed as **New** and flagged for attention until an
+administrator saves a workflow status. Apply migration 026 after migration 025.
+
+`/api/admin-orders` supplies exact dashboard counts and bounded, server-filtered
+order pages (maximum 50 rows). `/api/admin-projects` remains the authenticated
+order workspace and now supports internal status changes, individual Shopify
+refresh, opaque private-file identifiers, 60-second view/download links, and a
+Download All action. Download All requests individual secure links; it does not
+build a server ZIP. Shopify is read-only: no fulfillment or order mutation is
+performed.
+
 Add these server-only Vercel variables to the admin deployment. Use the same
 values as the Shopify estimator deployment and never add them to `config.js`:
 
@@ -250,6 +266,13 @@ values as the Shopify estimator deployment and never add them to `config.js`:
 - `SHOPIFY_SHOP`
 - `SHOPIFY_API_KEY`
 - `SHOPIFY_API_SECRET`
+
+The Shopify app needs `read_draft_orders` for its existing checkout recovery and
+`read_orders` for final order number, payment, fulfillment, and total. The
+optional customer phone and shipping detail panel uses `read_customers` and is
+subject to Shopify's protected customer-data requirements. If that access is not
+available, the page continues with the contact and project data already stored
+in Supabase.
 
 Keep `PUBLIC_SITE_URL` on the public/customer domain. The Shopify app already
 needs `read_draft_orders` for Draft Order recovery. Add `read_orders` to the app

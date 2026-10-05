@@ -61,3 +61,20 @@ test("Shopify reconciliation falls back to Draft Order data when read_orders is 
   assert.equal(project.shopify_order_number, null);
   assert.equal(project.shopify_admin_url, "https://admin.shopify.com/store/mucci-fallback/draft_orders/77");
 });
+
+test("Shopify order detail uses current customer contact fields and bounded shipping data", async () => {
+  const responses = [
+    { ok:true, json:async () => ({ access_token:"secret", expires_in:3600 }) },
+    { ok:true, json:async () => ({ data:{ node:{
+      id:"gid://shopify/Order/1001", createdAt:"2026-10-04T10:00:00Z", note:"Leave at desk",
+      customer:{ displayName:"Alex", defaultEmailAddress:{ emailAddress:"alex@example.test" }, defaultPhoneNumber:{ phoneNumber:"555-0100" } },
+      shippingAddress:{ formattedArea:"Toronto ON, Canada", address1:"1 Main St", address2:null, zip:"M1M 1M1", phone:"555-0101" }
+    } } }) }
+  ];
+  const result = await shopify.orderDetails("gid://shopify/Order/1001", {
+    SHOPIFY_SHOP:"mucci-detail.myshopify.com", SHOPIFY_API_KEY:"client", SHOPIFY_API_SECRET:"secret"
+  }, async () => responses.shift());
+  assert.equal(result.customer.email, "alex@example.test");
+  assert.equal(result.customer.phone, "555-0100");
+  assert.equal(result.shippingAddress.postalCode, "M1M 1M1");
+});

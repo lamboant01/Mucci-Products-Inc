@@ -8,6 +8,9 @@
     },
     "api/admin-projects.js": {
       "maxDuration": 60
+    },
+    "api/admin-orders.js": {
+      "maxDuration": 60
     }
   },
   "routes": [

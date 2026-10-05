@@ -6,11 +6,15 @@
   const section = root.dataset.section || "dashboard";
   const labels = {
     pending:"New", reviewed:"Reviewing", etsy_prepared:"Quoted", awaiting_customer:"Awaiting customer",
-    accepted:"Accepted", in_production:"In production", completed:"Completed", declined:"Cancelled"
+    accepted:"Accepted", in_production:"In production", completed:"Completed", declined:"Cancelled",
+    NEW:"New", REVIEWING:"Reviewing", AWAITING_CUSTOMER:"Awaiting customer", DESIGNING:"Designing",
+    READY_TO_PRINT:"Ready to print", PRINTING:"Printing", POST_PROCESSING:"Post-processing",
+    QUALITY_CHECK:"Quality check", READY_TO_SHIP:"Ready to ship", COMPLETED:"Completed", CANCELLED:"Cancelled"
   };
+  const internalStatuses = ["NEW", "REVIEWING", "AWAITING_CUSTOMER", "DESIGNING", "READY_TO_PRINT", "PRINTING", "POST_PROCESSING", "QUALITY_CHECK", "READY_TO_SHIP", "COMPLETED", "CANCELLED"];
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" })[character]);
   const date = (value) => value ? new Date(value).toLocaleString("en-CA", { dateStyle:"medium", timeStyle:"short" }) : "Not available";
-  const money = (value) => Number(value || 0).toLocaleString("en-CA", { style:"currency", currency:"CAD" });
+  const money = (value) => value == null || value === "" ? "Not available" : Number(value).toLocaleString("en-CA", { style:"currency", currency:"CAD" });
   const fileSize = (value) => {
     const bytes = Number(value || 0);
     if (!bytes) return "Size unavailable";
@@ -36,12 +40,12 @@
   }
 
   function badge(value) {
-    return `<span class="status-badge status-${escapeHtml(value)}">${escapeHtml(status(value))}</span>`;
+    return `<span class="status-badge status-${escapeHtml(String(value || "unknown").toLowerCase())}">${escapeHtml(status(value))}</span>`;
   }
 
   function requestRows(items, empty = "No records found.") {
     if (!items.length) return `<div class="empty-state">${escapeHtml(empty)}</div>`;
-    return `<div class="responsive-table"><table><thead><tr><th>Shopify / Quote</th><th>Customer</th><th>Service</th><th>Project</th><th>Payment / fulfillment</th><th>Files</th><th>Submitted</th><th>Total</th><th></th></tr></thead><tbody>${items.map((item) => `<tr><td><strong>${escapeHtml(item.shopify_order_number || item.shopify_draft_order_name || "No Shopify order")}</strong><small>${escapeHtml(item.quote_code)}</small></td><td>${escapeHtml(item.name || "Name not provided")}<small>${escapeHtml(item.email || "No email provided")}</small></td><td>${escapeHtml(service(item.service_intent || item.file_status))}</td><td>${badge(item.status)}</td><td>${escapeHtml(status(item.shopify_payment_status || item.shopify_draft_order_live_status || item.shopify_draft_order_status || "Not linked"))}<small>${escapeHtml(item.shopify_fulfillment_status ? status(item.shopify_fulfillment_status) : "")}</small></td><td>${escapeHtml(fileCount(item))}</td><td>${escapeHtml(date(item.created_at))}</td><td>${escapeHtml(money(item.final_price || item.estimated_total_max || item.estimated_price_max || item.estimated_price))}</td><td><a class="table-link" href="${projectUrl(item.id)}">Open project</a></td></tr>`).join("")}</tbody></table></div>`;
+    return `<div class="responsive-table order-table"><table><thead><tr><th>Order</th><th>Quote</th><th>Customer</th><th>Service</th><th>Internal Status</th><th>Shopify Status</th><th>Total</th><th>Files</th><th>Date</th><th>Action</th></tr></thead><tbody>${items.map((item) => `<tr><td data-label="Order"><strong>${escapeHtml(item.shopify_order_number || "Pending conversion")}</strong></td><td data-label="Quote">${escapeHtml(item.quote_code)}</td><td data-label="Customer">${escapeHtml(item.name || "Name not provided")}<small>${escapeHtml(item.email || "No email provided")}</small></td><td data-label="Service">${escapeHtml(service(item.service_intent || item.file_status))}</td><td data-label="Internal status">${badge(item.internal_status || "NEW")}</td><td data-label="Shopify status">${item.shopify_payment_status ? badge(item.shopify_payment_status) : "Not available"}<small>${escapeHtml(item.shopify_fulfillment_status ? status(item.shopify_fulfillment_status) : "")}</small></td><td data-label="Total">${escapeHtml(money(item.shopify_total_amount ?? item.final_price ?? item.estimated_total_max))}</td><td data-label="Files">${escapeHtml(item.file_count ?? fileCount(item))}</td><td data-label="Date">${escapeHtml(date(item.created_at))}</td><td data-label="Action"><a class="table-link" href="${projectUrl(item.id)}">Open order</a></td></tr>`).join("")}</tbody></table></div>`;
   }
 
   function fileCount(item) {
@@ -56,18 +60,19 @@
 
   function renderDashboard(data) {
     const cards = [
-      ["New requests", data.totals.newRequests, "/admin/estimates"],
-      ["Awaiting action", data.totals.awaitingAction, "/admin/estimates"],
-      ["Active orders", data.totals.activeOrders, "/admin/orders"],
-      ["Completed orders", data.totals.completedOrders, "/admin/orders"],
-      ["Customers", data.totals.customers, "/admin/customers"],
-      ["Active digital cards", data.totals.activeCards, "/admin/cards"]
+      ["New Orders", data.metrics.newOrders, "/admin/orders?status=NEW"],
+      ["Awaiting Review", data.metrics.awaitingReview, "/admin/orders?status=REVIEWING"],
+      ["Design Required", data.metrics.designRequired, "/admin/orders?status=DESIGNING"],
+      ["Ready to Print", data.metrics.readyToPrint, "/admin/orders?status=READY_TO_PRINT"],
+      ["Printing", data.metrics.printing, "/admin/orders?status=PRINTING"],
+      ["Ready to Ship", data.metrics.readyToShip, "/admin/orders?status=READY_TO_SHIP"],
+      ["Open Orders", data.metrics.openOrders, "/admin/orders"],
+      ["Recently Completed", data.metrics.recentlyCompleted, "/admin/orders?status=COMPLETED"]
     ];
-    root.innerHTML = `<div class="metric-grid">${cards.map(([label, value, href]) => `<a class="metric-card" href="${href}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>View details</small></a>`).join("")}</div>
-      ${data.totals.manualReview ? `<div class="operations-alert"><strong>${escapeHtml(data.totals.manualReview)} request${data.totals.manualReview === 1 ? "" : "s"} require manual review.</strong><a href="/admin/estimates">Review requests</a></div>` : ""}
-      <div class="operations-grid"><section class="operations-panel wide"><div class="section-heading"><div><p class="eyebrow">Inbox</p><h2>Requests awaiting action</h2></div><a href="/admin/estimates">All requests</a></div>${requestRows(data.actionRequired, "Nothing is waiting for action.")}</section>
-      <section class="operations-panel"><div class="section-heading"><div><p class="eyebrow">Latest</p><h2>Recent customers</h2></div><a href="/admin/customers">All customers</a></div>${customerCards(data.customers.slice(0, 5))}</section>
-      <section class="operations-panel"><div class="section-heading"><div><p class="eyebrow">Audit</p><h2>Recent activity</h2></div><a href="/admin/activity">Full activity</a></div>${data.auditAvailable ? activityList(data.activity.slice(0, 6)) : migrationNotice()}</section></div>`;
+    const notice = data.shopify?.configured === false ? '<div class="operations-alert"><strong>Shopify reconciliation is not configured.</strong><span>Stored Supabase project information remains available.</span></div>' : data.shopify?.orderAccess === "read_orders_required" ? '<div class="operations-alert"><strong>Shopify access needs reauthorization.</strong><span>Grant <code>read_orders</code> to classify converted orders and show payment and fulfillment.</span></div>' : data.shopify?.orderAccess === "unavailable" ? '<div class="operations-alert"><strong>Shopify data unavailable.</strong><span>Cached order data remains available.</span></div>' : "";
+    root.innerHTML = `${notice}<div class="metric-grid">${cards.map(([label, value, href]) => `<a class="metric-card" href="${href}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>View details</small></a>`).join("")}</div>
+      <div class="operations-grid"><section class="operations-panel wide"><div class="section-heading"><div><p class="eyebrow">Action queue</p><h2>Needs Attention</h2></div><a href="/admin/orders?attention=true">Filtered orders</a></div>${data.needsAttention.length ? `<div class="attention-list">${data.needsAttention.map((item) => `<article><div><strong>${escapeHtml(item.shopify_order_number || item.quote_code)}</strong><small>${escapeHtml(item.name || "Name not provided")} · ${escapeHtml((item.attention_flags || []).join(" · "))}</small></div><a class="table-link" href="${projectUrl(item.id)}">Open order</a></article>`).join("")}</div>` : '<div class="empty-state">No orders currently meet the defined attention rules.</div>'}</section>
+      <section class="operations-panel wide"><div class="section-heading"><div><p class="eyebrow">Latest</p><h2>Recent Orders</h2></div><a href="/admin/orders">All orders</a></div>${requestRows(data.recentOrders, "No paid orders are available yet.")}</section></div>`;
   }
 
   function customerCards(items) {
@@ -79,23 +84,28 @@
     return `<div class="list-controls"><label class="search-control"><span class="visually-hidden">Search</span><input id="operations-search" type="search" placeholder="${escapeHtml(placeholder)}" autocomplete="off"></label>${filters}</div><p id="result-count" class="result-count" role="status"></p>`;
   }
 
-  function renderOrders(data) {
+  function renderOrders() {
     const selectedProject = new URLSearchParams(window.location.search).get("project");
     if (selectedProject) return renderProject(selectedProject);
-    const shopifyNotice = data.shopify?.orderAccess === "read_orders_required"
-      ? '<div class="operations-alert"><strong>Shopify order status needs read_orders.</strong><span>Draft Orders are linked, but completed order numbers, payment, and fulfillment need the Shopify app to be granted read_orders.</span></div>'
-      : data.shopify?.orderAccess === "unavailable"
-        ? '<div class="operations-alert"><strong>Shopify status is temporarily unavailable.</strong><span>Stored projects and private files remain available; live order status could not be refreshed.</span></div>'
-        : data.shopify?.configured === false
-          ? '<div class="operations-alert"><strong>Shopify reconciliation is not configured.</strong><span>Add the server-only Shopify variables to show live order numbers, payment, and fulfillment.</span></div>'
-          : "";
-    root.innerHTML = `${shopifyNotice}${controls("Search quote, Shopify order, customer, email, or project ID", '<select id="status-filter" aria-label="Filter by project status"><option value="all">All project statuses</option><option value="pending">New</option><option value="reviewed">Reviewing</option><option value="accepted">Accepted</option><option value="in_production">In production</option><option value="completed">Completed</option><option value="declined">Cancelled</option></select><select id="service-filter" aria-label="Filter by service"><option value="all">All services</option><option value="PRINT_ONLY">Print only</option><option value="DESIGN_ONLY">Design only</option><option value="DESIGN_AND_PRINT">Design and print</option></select>')}<div id="operations-results"></div>`;
-    bindFilter(data.orders, (item, query, selected) => {
-      const serviceFilter = document.querySelector("#service-filter")?.value || "all";
-      return (selected === "all" || item.status === selected)
-        && (serviceFilter === "all" || item.service_intent === serviceFilter)
-        && [item.id, item.quote_code, item.shopify_order_number, item.shopify_draft_order_name, item.name, item.email, item.material, item.status, item.service_intent, item.shopify_payment_status, item.shopify_fulfillment_status, item.shopify_draft_order_live_status].join(" ").toLowerCase().includes(query);
-    }, requestRows, null, ["#service-filter"]);
+    const query = new URLSearchParams(window.location.search);
+    root.innerHTML = `<div id="orders-notice"></div><form id="orders-filter-form" class="order-filters"><label><span>Search</span><input name="search" type="search" placeholder="Order, quote, customer, email, or UUID"></label><label><span>Internal status</span><select name="internalStatus"><option value="">All statuses</option>${internalStatuses.map((value) => `<option value="${value}" ${query.get("status") === value ? "selected" : ""}>${escapeHtml(status(value))}</option>`).join("")}</select></label><label><span>Payment</span><select name="paymentStatus"><option value="">All payment states</option><option>PAID</option><option>AUTHORIZED</option><option>PARTIALLY_PAID</option><option>REFUNDED</option><option>VOIDED</option></select></label><label><span>Fulfillment</span><select name="fulfillmentStatus"><option value="">All fulfillment states</option><option>UNFULFILLED</option><option>PARTIALLY_FULFILLED</option><option>FULFILLED</option></select></label><label><span>Service</span><select name="serviceIntent"><option value="">All services</option><option value="PRINT_ONLY">Print only</option><option value="DESIGN_ONLY">Design only</option><option value="DESIGN_AND_PRINT">Design and print</option></select></label><label><span>Files</span><select name="hasFiles"><option value="">With or without files</option><option value="yes">Has files</option><option value="no">No files</option></select></label><label><span>From</span><input name="dateFrom" type="date"></label><label><span>To</span><input name="dateTo" type="date"></label><label><span>Sort</span><select name="sort"><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="order_number">Order number</option><option value="highest_value">Highest value</option><option value="status">Status</option></select></label><label class="checkbox-filter"><input name="needsAttention" type="checkbox" value="true" ${query.get("attention") === "true" ? "checked" : ""}><span>Needs attention only</span></label><button class="button button-primary" type="submit">Apply filters</button><a class="button button-secondary" href="/admin/orders">Clear</a></form><p id="result-count" class="result-count" role="status"></p><div id="operations-results"></div><div id="orders-pagination" class="pagination"></div>`;
+    const form = root.querySelector("#orders-filter-form");
+    const load = async (page = 1) => {
+      root.querySelector("#operations-results").innerHTML = '<div class="loading-state">Loading orders…</div>';
+      try {
+        const filters = Object.fromEntries([...new FormData(form).entries()].filter(([, value]) => value !== ""));
+        const data = await api("/api/admin-orders", { action:"list", ...filters, page });
+        root.querySelector("#orders-notice").innerHTML = data.shopify?.configured === false ? '<div class="operations-alert"><strong>Shopify reconciliation is not configured.</strong><span>Add the server-only Shopify variables.</span></div>' : data.shopify?.orderAccess === "read_orders_required" ? '<div class="operations-alert"><strong>Shopify access needs reauthorization.</strong><span>Grant <code>read_orders</code>; Supabase projects remain available.</span></div>' : data.shopify?.orderAccess === "unavailable" ? '<div class="operations-alert"><strong>Shopify data unavailable.</strong><span>Stored data remains available. Retry from an order detail page.</span></div>' : "";
+        root.querySelector("#result-count").textContent = `${data.count} order${data.count === 1 ? "" : "s"}`;
+        root.querySelector("#operations-results").innerHTML = requestRows(data.orders, "No paid or converted Shopify orders match these filters.");
+        const pages = Math.max(1, Math.ceil(data.count / data.pageSize));
+        root.querySelector("#orders-pagination").innerHTML = `<button class="button button-secondary" type="button" ${data.page <= 1 ? "disabled" : ""}>Previous</button><span>Page ${data.page} of ${pages}</span><button class="button button-secondary" type="button" ${data.page >= pages ? "disabled" : ""}>Next</button>`;
+        const buttons = root.querySelectorAll("#orders-pagination button");
+        buttons[0].addEventListener("click", () => load(data.page - 1)); buttons[1].addEventListener("click", () => load(data.page + 1));
+      } catch (error) { root.querySelector("#operations-results").innerHTML = `<div class="empty-state error-state"><strong>Could not load orders.</strong><p>${escapeHtml(error.message)}</p></div>`; }
+    };
+    form.addEventListener("submit", (event) => { event.preventDefault(); load(1); });
+    load();
   }
 
   function detailRows(rows) {
@@ -124,7 +134,7 @@
 
   function renderProjectFiles(project) {
     if (!project.files.length) return '<div class="empty-state">No uploaded customer files are recorded for this project.</div>';
-    return `<div class="project-files">${project.files.map((file) => `<article><div><strong>${escapeHtml(file.name)}</strong><small>${escapeHtml(file.extension.toUpperCase() || "FILE")} · ${escapeHtml(fileSize(file.sizeBytes))} · ${escapeHtml(date(file.uploadedAt))}</small></div><div class="table-actions">${file.viewable ? `<button class="table-link project-file" type="button" data-path="${escapeHtml(file.path)}" data-download="false">View</button>` : ""}<button class="table-link project-file" type="button" data-path="${escapeHtml(file.path)}" data-download="true">Download</button></div></article>`).join("")}</div>`;
+    return `<div class="project-files">${project.files.map((file) => `<article><div><strong>${escapeHtml(file.name)}</strong><small>${escapeHtml(file.category)} · ${escapeHtml(file.extension.toUpperCase() || "FILE")} · ${escapeHtml(fileSize(file.sizeBytes))} · ${escapeHtml(date(file.uploadedAt))}</small></div><div class="table-actions">${file.viewable ? `<button class="table-link project-file" type="button" data-file-id="${escapeHtml(file.id)}" data-download="false">${file.extension === "pdf" ? "Open" : "View"}</button>` : ""}<button class="table-link project-file" type="button" data-file-id="${escapeHtml(file.id)}" data-download="true">Download</button></div></article>`).join("")}</div>`;
   }
 
   async function renderProject(estimateId) {
@@ -134,17 +144,31 @@
       const estimate = project.estimate;
       const orderLabel = estimate.shopify_order_number || estimate.shopify_draft_order_name || "No Shopify order";
       const settings = Array.isArray(estimate.model_files) ? estimate.model_files.find((item) => item?.print_settings)?.print_settings : null;
-      root.innerHTML = `<a class="project-back" href="/admin/orders">← All projects</a>
-        <article class="project-detail"><header class="project-detail-header"><div><p class="eyebrow">Order / project</p><h2>${escapeHtml(orderLabel)} · ${escapeHtml(estimate.quote_code)}</h2><p>${escapeHtml(estimate.name || "Name not provided")} · ${escapeHtml(estimate.email || "Email not provided")}</p></div><div class="project-header-status">${badge(estimate.status)}<span>${escapeHtml(status(estimate.shopify_payment_status || estimate.shopify_draft_order_live_status || estimate.shopify_draft_order_status || "Not linked"))}</span>${estimate.shopify_fulfillment_status ? `<span>${escapeHtml(status(estimate.shopify_fulfillment_status))}</span>` : ""}</div></header>
-        <div class="project-actions"><a class="button button-secondary" href="${estimateUrl(estimate.quote_code)}">Open estimate review</a>${estimate.shopify_admin_url ? `<a class="button button-primary" href="${escapeHtml(estimate.shopify_admin_url)}" target="_blank" rel="noopener noreferrer">Open Shopify Order</a>` : ""}</div>
-        <section><h3>Project details</h3>${detailRows([["Project ID", estimate.id], ["Quote code", estimate.quote_code], ["Service", service(estimate.service_intent)], ["File / modification status", status(estimate.file_status)], ["Quantity", estimate.quantity], ["Dimensions", dimensions(estimate)], ["Material", estimate.material], ["Colours", estimate.desired_colours || estimate.colour_count], ["Estimated print hours", estimate.total_print_hours ?? estimate.estimated_production_hours], ["Filament weight", estimate.total_filament_grams ?? estimate.estimated_material_grams], ["Infill", settings?.infill_percent == null ? null : `${settings.infill_percent}%`], ["Wall count", settings?.wall_loops], ["Created", date(estimate.created_at)], ["Updated", date(estimate.updated_at)]])}</section>
-        <section><h3>Pricing / estimate</h3>${detailRows([["Estimated total", money(estimate.estimated_total_max ?? estimate.estimated_price_max)], ["Final price", estimate.final_price == null ? "Not set" : money(estimate.final_price)], ["Manufacturing", estimate.manufacturing_total == null ? null : money(estimate.manufacturing_total)], ["Design fee", estimate.design_fee == null ? null : money(estimate.design_fee)], ["Assembly fee", estimate.assembly_fee == null ? null : money(estimate.assembly_fee)], ["Shipping estimate", estimate.shipping_amount == null ? null : money(estimate.shipping_amount)]])}</section>
-        <section><h3>Customer information and notes</h3>${detailRows([["Customer", estimate.name], ["Email", estimate.email], ["Customer description", estimate.application_description], ["Customer notes", estimate.notes], ["Admin notes", estimate.admin_notes], ["Clarification notes", estimate.clarification_notes]])}</section>
-        <section><h3>Estimator inputs</h3>${detailRows([["Application category", estimate.application_category], ["Geometry classification", estimate.ai_geometry_classification], ["Utilization factor", estimate.geometry_utilization_factor], ["Recommended infill", estimate.recommended_infill_percent == null ? null : `${estimate.recommended_infill_percent}%`], ["Recommended walls", estimate.recommended_wall_loops], ["Recommended top / bottom layers", estimate.recommended_top_bottom_layers], ["Print profile", estimate.print_profile], ["Print-time source", estimate.print_time_source], ["Estimate method", estimate.estimation_method], ["Assembly required", estimate.assembly_required ? "Yes" : "No"], ["Manual review", estimate.requires_manual_review ? "Required" : "Not required"]])}</section>
-        <section><h3>Shopify</h3>${detailRows([["Draft Order", estimate.shopify_draft_order_name || estimate.shopify_draft_order_id], ["Order number", estimate.shopify_order_number], ["Payment", status(estimate.shopify_payment_status)], ["Fulfillment", status(estimate.shopify_fulfillment_status)], ["Draft status", status(estimate.shopify_draft_order_live_status || estimate.shopify_draft_order_status)]])}${project.shopify?.orderAccess === "read_orders_required" ? '<p class="project-limitation">Grant <code>read_orders</code> to the Shopify app to retrieve completed order numbers, payment status, and fulfillment status.</p>' : ""}</section>
-        <section><h3>Customer files</h3>${renderProjectFiles(project)}</section>
-        ${additionalRows(estimate).length ? `<details class="project-additional"><summary>Additional stored project fields</summary>${detailRows(additionalRows(estimate))}</details>` : ""}</article>`;
+      const detail = project.shopify?.detail || {};
+      const customer = detail.customer || {};
+      const shipping = detail.shippingAddress || {};
+      const events = [{ label:"Project created", at:estimate.created_at }, ...(project.files.length ? [{ label:`${project.files.length} customer file${project.files.length === 1 ? "" : "s"} recorded`, at:project.files[0].uploadedAt }] : []), ...(project.events || []).map((event) => ({ label:`Workflow: ${status(event.old_value || "not set")} → ${status(event.new_value)}`, at:event.created_at }))];
+      root.innerHTML = `<a class="project-back" href="/admin/orders">← All orders</a>
+        ${project.shopify?.orderAccess === "read_orders_required" ? '<div class="operations-alert"><strong>Shopify access needs reauthorization.</strong><span>Grant <code>read_orders</code>. Project and file access remains available.</span></div>' : project.shopify?.orderAccess === "unavailable" ? '<div class="operations-alert"><strong>Shopify data unavailable.</strong><span>Stored project information remains available.</span></div>' : ""}
+        <header class="project-detail-header order-detail-header"><div><p class="eyebrow">${escapeHtml(service(estimate.service_intent))}</p><h2>${escapeHtml(orderLabel)}</h2><p>${escapeHtml(estimate.quote_code)}</p></div><div class="project-header-status">${badge(estimate.internal_status || "NEW")}${estimate.shopify_payment_status ? badge(estimate.shopify_payment_status) : ""}${estimate.shopify_fulfillment_status ? badge(estimate.shopify_fulfillment_status) : ""}</div></header>
+        <div class="project-actions"><a class="button button-secondary" href="${estimateUrl(estimate.quote_code)}">Open estimate</a>${estimate.shopify_admin_url ? `<a class="button button-primary" href="${escapeHtml(estimate.shopify_admin_url)}" target="_blank" rel="noopener noreferrer">Open Shopify Order</a>` : ""}<button id="refresh-shopify" class="button button-secondary" type="button">Refresh Shopify Data</button><button id="download-all" class="button button-secondary" type="button" ${project.files.length ? "" : "disabled"}>Download All</button><button class="button button-secondary copy-action" type="button" data-copy="${escapeHtml(estimate.quote_code)}">Copy quote code</button>${estimate.email ? `<button class="button button-secondary copy-action" type="button" data-copy="${escapeHtml(estimate.email)}">Copy customer email</button>` : ""}</div>
+        <div class="order-workspace"><article class="project-detail"><section><h3>Customer</h3>${detailRows([["Name", customer.name || estimate.name], ["Email", customer.email || estimate.email], ["Phone", customer.phone || shipping.phone], ["Shipping area", shipping.area], ["Shipping address", [shipping.address1, shipping.address2, shipping.postalCode].filter(Boolean).join(", ")], ["Customer notes", detail.note || estimate.notes]])}</section>
+        <section><h3>Project</h3>${detailRows([["Project ID", estimate.id], ["Service", service(estimate.service_intent)], ["Project description", estimate.application_description || estimate.intended_use], ["Quantity", estimate.final_quantity || estimate.quantity], ["Dimensions", dimensions(estimate)], ["Material", estimate.material], ["Colours", estimate.desired_colours || estimate.colour_count], ["Application / use", estimate.application_category || estimate.intended_use], ["Print hours", estimate.total_print_hours ?? estimate.estimated_production_hours], ["Filament grams", estimate.total_filament_grams ?? estimate.estimated_material_grams], ["Infill", settings?.infill_percent == null ? estimate.recommended_infill_percent : `${settings.infill_percent}%`], ["Wall loops", settings?.wall_loops ?? estimate.recommended_wall_loops]])}</section>
+        <section><h3>Pricing</h3>${detailRows([["Quoted total", money(estimate.final_price ?? estimate.estimated_total_max)], ["Design cost", money(estimate.design_fee)], ["Print cost", money(estimate.manufacturing_total)], ["Shipping", money(estimate.shipping_amount)], ["Shopify total", money(estimate.shopify_total_amount)], ["Payment status", status(estimate.shopify_payment_status)]])}</section>
+        <section><h3>Customer Files</h3><p class="project-limitation">Secure links expire after 60 seconds. Raw private object paths are not exposed.</p>${renderProjectFiles(project)}</section>
+        ${(project.previousProjects || []).length ? `<section><h3>Previous Mucci Projects</h3><div class="compact-list">${project.previousProjects.map((item) => `<article><div><strong>${escapeHtml(item.shopify_order_number || item.quote_code)}</strong><small>${escapeHtml(item.name || service(item.service_intent))}</small></div><a class="table-link" href="${projectUrl(item.id)}">${escapeHtml(status(item.internal_status || item.status))}</a></article>`).join("")}</div></section>` : ""}</article>
+        <aside class="order-sidebar"><section><h3>Order workflow</h3><label><span>Internal Mucci status</span><select id="internal-status">${internalStatuses.map((value) => `<option value="${value}" ${(estimate.internal_status || "NEW") === value ? "selected" : ""}>${escapeHtml(status(value))}</option>`).join("")}</select></label><button id="save-status" class="button button-primary" type="button">Change Status</button><div class="quick-statuses"><button type="button" data-status="READY_TO_PRINT">Ready to Print</button><button type="button" data-status="PRINTING">Printing</button><button type="button" data-status="QUALITY_CHECK">Quality Check</button><button type="button" data-status="READY_TO_SHIP">Ready to Ship</button><button type="button" data-status="COMPLETED">Completed</button></div><p id="status-message" class="form-status" role="status"></p></section><section><h3>Shopify</h3>${!estimate.shopify_order_number && estimate.shopify_draft_order_id ? '<p class="project-limitation">Order has not yet converted from Draft Order, or <code>read_orders</code> is unavailable.</p>' : ""}${detailRows([["Order", estimate.shopify_order_number], ["Payment", status(estimate.shopify_payment_status)], ["Fulfillment", status(estimate.shopify_fulfillment_status)], ["Last refreshed", date(estimate.shopify_reconciled_at)]])}</section><section><h3>Timeline / activity</h3><ol class="activity-list">${events.sort((a,b) => new Date(b.at) - new Date(a.at)).map((event) => `<li><span class="activity-icon" aria-hidden="true"></span><div><strong>${escapeHtml(event.label)}</strong><small>${escapeHtml(date(event.at))}</small></div></li>`).join("")}</ol></section></aside></div>`;
       document.querySelectorAll(".project-file").forEach((button) => button.addEventListener("click", () => openProjectFile(estimate.id, button)));
+      document.querySelectorAll(".copy-action").forEach((button) => button.addEventListener("click", async () => { await navigator.clipboard.writeText(button.dataset.copy); button.textContent = "Copied"; }));
+      document.querySelector("#refresh-shopify").addEventListener("click", () => renderProject(estimate.id));
+      document.querySelector("#download-all").addEventListener("click", () => downloadAllFiles(estimate.id));
+      const saveStatus = async (value) => {
+        const message = document.querySelector("#status-message"); message.textContent = "Saving…";
+        try { await api("/api/admin-projects", { action:"status", estimateId:estimate.id, status:value }); await renderProject(estimate.id); }
+        catch (error) { message.textContent = error.message || "The status could not be changed."; }
+      };
+      document.querySelector("#save-status").addEventListener("click", () => saveStatus(document.querySelector("#internal-status").value));
+      document.querySelectorAll(".quick-statuses button").forEach((button) => button.addEventListener("click", () => saveStatus(button.dataset.status)));
     } catch (error) {
       root.innerHTML = `<div class="empty-state error-state"><strong>Could not load this project.</strong><p>${escapeHtml(error.message)}</p><a class="button button-secondary" href="/admin/orders">Back to projects</a></div>`;
     }
@@ -154,7 +178,7 @@
     const popup = window.open("about:blank", "_blank");
     button.disabled = true;
     try {
-      const payload = await api("/api/admin-projects", { action:"file", estimateId, path:button.dataset.path, download:button.dataset.download === "true" });
+      const payload = await api("/api/admin-projects", { action:"file", estimateId, fileId:button.dataset.fileId, download:button.dataset.download === "true" });
       if (popup) popup.location = payload.signedUrl; else window.location.assign(payload.signedUrl);
     } catch (error) {
       popup?.close();
@@ -162,6 +186,20 @@
     } finally {
       button.disabled = false;
     }
+  }
+
+  async function downloadAllFiles(estimateId) {
+    const button = document.querySelector("#download-all");
+    button.disabled = true;
+    try {
+      const payload = await api("/api/admin-projects", { action:"download_all", estimateId });
+      for (const file of payload.files) {
+        const link = document.createElement("a");
+        link.href = file.signedUrl; link.download = file.name; link.rel = "noopener";
+        document.body.append(link); link.click(); link.remove();
+      }
+    } catch (error) { window.alert(error.message || "Could not generate secure download links."); }
+    finally { button.disabled = false; }
   }
 
   function renderCustomers(data) {
@@ -251,12 +289,14 @@
   async function init() {
     root.innerHTML = '<div class="loading-state" role="status">Loading operations data…</div>';
     try {
-      const data = await api("/api/admin-operations", { action:"load" });
-      if (section === "orders") renderOrders(data);
+      if (section === "dashboard") return renderDashboard(await api("/api/admin-orders", { action:"dashboard" }));
+      if (section === "orders") return renderOrders();
+      const data = await api("/api/admin-operations", { action:"load", section });
+      if (section === "orders") renderOrders();
       else if (section === "customers") renderCustomers(data);
       else if (section === "files") renderFiles(data);
       else if (section === "activity") renderActivity(data);
-      else renderDashboard(data);
+      else root.innerHTML = '<div class="empty-state">This admin section is not available.</div>';
     } catch (error) {
       root.innerHTML = `<div class="empty-state error-state"><strong>We could not load this admin section.</strong><p>${escapeHtml(error.message)}</p><button class="button button-secondary" id="operations-retry" type="button">Try again</button></div>`;
       document.querySelector("#operations-retry").addEventListener("click", () => window.location.reload());

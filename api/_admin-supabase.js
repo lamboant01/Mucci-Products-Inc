@@ -42,6 +42,29 @@ async function select(config, table, parameters) {
   return request(config, queryPath(table, parameters));
 }
 
+async function selectWithCount(config, table, parameters) {
+  const response = await fetch(`${config.supabaseUrl}${queryPath(table, parameters)}`, {
+    method:"GET",
+    headers:headers(config, { Prefer:"count=exact" }),
+    signal:AbortSignal.timeout(10000)
+  });
+  const text = await response.text();
+  let data = [];
+  if (text) {
+    try { data = JSON.parse(text); }
+    catch { data = []; }
+  }
+  if (!response.ok) {
+    const error = new Error(`Supabase request failed with status ${response.status}.`);
+    error.statusCode = response.status;
+    error.detail = data;
+    throw error;
+  }
+  const range = String(response.headers.get("content-range") || "");
+  const countText = range.split("/")[1];
+  return { rows:Array.isArray(data) ? data : [], count:countText === "*" ? null : Number(countText || 0) };
+}
+
 async function patch(config, table, parameters, body) {
   return request(config, queryPath(table, parameters), {
     method:"PATCH",
@@ -83,4 +106,4 @@ async function signedUploadUrl(config, bucket, objectPath) {
   return { signedUrl, publicUrl };
 }
 
-module.exports = { headers, insert, patch, queryPath, request, rpc, select, signedStorageUrl, signedUploadUrl };
+module.exports = { headers, insert, patch, queryPath, request, rpc, select, selectWithCount, signedStorageUrl, signedUploadUrl };

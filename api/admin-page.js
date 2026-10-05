@@ -6,11 +6,13 @@ const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (character
 
 function page({ title, body, scripts = [], authenticated = false, basePath = "" }) {
   const links = [
-    ["dashboard", "Dashboard"], ["estimates", "Requests / Estimates"], ["orders", "Orders / Projects"],
-    ["customers", "Customers"], ["cards", "Digital Cards"], ["files", "Files"],
-    ["activity", "Activity"], ["security", "Settings & Security"]
+    ["dashboard", "Dashboard"], ["orders", "Orders"], ["estimates", "Quotes / Estimates"],
+    ["files", "Files"], ["customers", "Customers"], ["security", "Settings"]
   ];
-  const navigation = authenticated ? `<aside class="admin-sidebar"><a class="admin-brand" href="${escapeHtml(basePath)}"><img src="/assets/mucci-products-logo.png" alt="Mucci Products"><span>Operations</span></a><nav class="management-nav" aria-label="Administration">${links.map(([key, label]) => `<a href="${escapeHtml(basePath)}/${key}" data-section="${key}">${label}</a>`).join("")}<form method="post" action="/api/admin-logout"><button class="button button-secondary" type="submit">Sign out</button></form></nav></aside>` : "";
+  const navLinks = links.map(([key, label]) => `<a href="${escapeHtml(basePath)}/${key}" data-section="${key}">${label}</a>`).join("");
+  const external = '<div class="admin-nav-group"><span>External</span><a href="https://admin.shopify.com/" target="_blank" rel="noopener noreferrer">Open Shopify Admin</a><a href="https://mucciproducts.com" target="_blank" rel="noopener noreferrer">Open Shopify Store</a></div>';
+  const identity = '<div class="admin-identity"><strong>Anthony</strong><span>anthony@mucciproducts.com</span><form method="post" action="/api/admin-logout"><button type="submit">Sign Out</button></form></div>';
+  const navigation = authenticated ? `<header class="admin-mobile-bar"><a href="${escapeHtml(basePath)}"><img src="/assets/mucci-products-logo.png" alt="Mucci Products"><span>Admin</span></a><details><summary>Menu</summary><nav aria-label="Mobile administration">${navLinks}${external}${identity}</nav></details></header><aside class="admin-sidebar"><a class="admin-brand" href="${escapeHtml(basePath)}"><img src="/assets/mucci-products-logo.png" alt="Mucci Products"><span>Admin</span></a><nav class="management-nav" aria-label="Administration">${navLinks}<div class="admin-nav-group"><span>Tools</span><a href="${escapeHtml(basePath)}/cards">Digital Cards</a></div>${external}</nav>${identity}</aside>` : "";
   const scriptTags = scripts.map((script) => `<script src="${escapeHtml(script)}" defer></script>`).join("");
   return `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive,nosnippet"><title>${escapeHtml(title)} | Mucci Products</title><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/cards.css"><link rel="stylesheet" href="/assets/management.css"></head><body class="cards-page"><main class="dashboard-shell${authenticated ? " admin-layout" : ""}">${navigation}<div class="admin-main">${body}</div></main>${scriptTags}</body></html>`;
 }
@@ -28,12 +30,12 @@ function loginPage(authResult = "") {
 }
 
 function adminBody(section, user) {
-  if (section === "security") return `<section class="page-title"><p class="eyebrow">Private owner area</p><h1>Security</h1><p>Protect the authorized Google account with Google 2-Step Verification or a passkey.</p></section><section class="saved-card security-card"><h2>Authenticated administrator</h2><dl class="estimate-grid"><div><dt>Authorized Google email</dt><dd>${escapeHtml(user.email)}</dd></div><div><dt>Authentication provider</dt><dd>Google</dd></div><div><dt>Authorization mode</dt><dd>Exact verified ADMIN_EMAIL</dd></div></dl></section>`;
+  if (section === "security") return `<section class="page-title"><p class="eyebrow">Administration</p><h1>Settings</h1><p>Authentication and production integration requirements.</p></section><section class="saved-card security-card"><h2>Authenticated administrator</h2><dl class="estimate-grid"><div><dt>Authorized Google email</dt><dd>${escapeHtml(user.email)}</dd></div><div><dt>Authentication provider</dt><dd>Google only</dd></div><div><dt>Authorization mode</dt><dd>Exact verified ADMIN_EMAIL</dd></div></dl><p>Protect the authorized Google account with Google 2-Step Verification or a passkey. Supabase service-role and Shopify credentials remain server-only.</p></section>`;
   if (section === "cards") return `<section class="page-title"><p class="eyebrow">Private owner area</p><h1>Card Dashboard</h1><p>Manage the public details connected to your physical cards.</p></section><div id="dashboard" aria-live="polite"><p>Loading…</p></div>`;
   if (section === "estimates") return `<section class="page-title"><p class="eyebrow">Requests and estimates</p><h1>3D Print Requests</h1><p>Search submissions, review production details, update status, and prepare customer quotes.</p></section><div id="estimates-admin" aria-live="polite"><p>Loading…</p></div>`;
   const titles = {
-    dashboard:["Operations overview", "Dashboard", "Current requests, production work, customers, files, and recent administrative activity."],
-    orders:["Production", "Orders / Projects", "Search every estimator project by quote, Shopify order, customer, email, project ID, status, or service."],
+    dashboard:["Mucci Products", "Operations Dashboard", "What needs attention across paid orders, design, printing, quality control, and shipping."],
+    orders:["Production", "Orders", "Search and manage paid Shopify orders without mixing them with unconverted estimates."],
     customers:["Contacts", "Customers", "Customer contacts derived from estimate submissions and their request history."],
     files:["Private files", "Quote Files", "Open each private quote folder, view or download its files, and add late customer files without allowing deletion."],
     activity:["Audit trail", "Admin Activity", "Important administrator changes. Secrets and authentication tokens are never recorded."]

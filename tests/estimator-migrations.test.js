@@ -38,3 +38,16 @@ test("Shopify Draft Order migration preserves server-only linkage and atomic che
   assert.match(sql, /revoke all on function public\.claim_shopify_draft_order\(text,uuid,uuid\) from public, anon, authenticated/i);
   assert.doesNotMatch(sql, /drop\s+(table|schema)|service_role_key|api_secret/i);
 });
+
+test("order workflow migration is additive, server-private, and separate from Shopify state", () => {
+  const sql = migration("026_admin_order_workflow.sql");
+  for (const status of ["NEW", "DESIGNING", "READY_TO_PRINT", "PRINTING", "QUALITY_CHECK", "READY_TO_SHIP", "COMPLETED", "CANCELLED"]) {
+    assert.match(sql, new RegExp(`'${status}'`));
+  }
+  assert.match(sql, /add column if not exists internal_status text/i);
+  assert.match(sql, /create table if not exists public\.admin_order_events/i);
+  assert.match(sql, /revoke all on public\.admin_order_events from public, anon, authenticated/i);
+  assert.match(sql, /grant select, insert on public\.admin_order_events to service_role/i);
+  assert.match(sql, /admin_set_order_internal_status/i);
+  assert.doesNotMatch(sql, /drop\s+(table|schema)|delete\s+from|truncate/i);
+});

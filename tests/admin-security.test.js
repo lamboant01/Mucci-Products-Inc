@@ -7,6 +7,7 @@ const authStart = require("../api/admin-auth-start");
 const authCallback = require("../api/admin-auth-callback");
 const adminPage = require("../api/admin-page");
 const adminCards = require("../api/admin-cards");
+const adminOrders = require("../api/admin-orders");
 const adminProjects = require("../api/admin-projects");
 
 const root = path.join(__dirname, "..");
@@ -277,6 +278,10 @@ test("unauthenticated management APIs return 404 instead of revealing authorizat
   await adminProjects({ method:"POST", headers:{ origin:"https://mucciproducts.com" }, body:{ action:"load", estimateId:ADMIN_ID } }, projects);
   assert.equal(projects.statusCode, 404);
   assert.deepEqual(projects.body, { error:"Not found." });
+  const orders = responseRecorder();
+  await adminOrders({ method:"POST", headers:{ origin:"https://mucciproducts.com" }, body:{ action:"list" } }, orders);
+  assert.equal(orders.statusCode, 404);
+  assert.deepEqual(orders.body, { error:"Not found." });
 });
 
 test("authenticated but unauthorized management API calls also return 404", { concurrency:false }, async (context) => {
@@ -312,16 +317,21 @@ test("browser management clients contain no Supabase administrator identity or d
   assert.match(clients, /\/api\/admin-estimates/);
   assert.match(clients, /\/api\/admin-cards/);
   assert.match(clients, /\/api\/admin-operations/);
+  assert.match(clients, /\/api\/admin-orders/);
   assert.match(clients, /\/api\/admin-projects/);
 });
 
 test("operations API and pages remain behind server authorization and search blocking", () => {
   const api = read("api/admin-operations.js");
+  const orders = read("api/admin-orders.js");
   const projects = read("api/admin-projects.js");
   const page = read("api/admin-page.js");
   assert.match(api, /authenticateAdmin/);
   assert.match(api, /requestIsSameOrigin/);
   assert.match(api, /apiNotFound/);
+  assert.match(orders, /authenticateAdmin/);
+  assert.match(orders, /requestIsSameOrigin/);
+  assert.match(orders, /apiNotFound/);
   assert.match(projects, /authenticateAdmin/);
   assert.match(projects, /requestIsSameOrigin/);
   assert.match(projects, /apiNotFound/);

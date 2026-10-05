@@ -60,15 +60,19 @@ test("Files tab manages Drive quote folders without deletion", () => {
   assert.match(operations, /25 \* 1024 \* 1024/);
 });
 
-test("Orders tab searches Shopify projects and uses authenticated signed customer files", () => {
+test("Orders tab uses server-paginated workflow data and authenticated signed customer files", () => {
   const operations = fs.readFileSync(path.join(__dirname, "..", "admin", "operations.js"), "utf8");
   const projects = readApi("admin-projects.js");
-  for (const phrase of ["Shopify / Quote", "Open project", "Project ID", "Customer files", "Open Shopify Order", "read_orders"]) {
+  const orders = readApi("admin-orders.js");
+  for (const phrase of ["Internal Status", "Open order", "Project ID", "Customer Files", "Open Shopify Order", "read_orders", "Download All", "Refresh Shopify Data"]) {
     assert.match(operations, new RegExp(phrase));
   }
+  assert.match(orders, /authenticateAdmin/);
+  assert.match(orders, /requestIsSameOrigin/);
   assert.match(projects, /authenticateAdmin/);
   assert.match(projects, /requestIsSameOrigin/);
   assert.match(projects, /signedStorageUrl\(config, "print-estimate-files"/);
   assert.match(projects, /projectFiles\(estimate\)\.find/);
+  assert.doesNotMatch(operations, /data-path=/);
   assert.doesNotMatch(operations, /SUPABASE_SERVICE_ROLE_KEY|SHOPIFY_API_SECRET/);
 });

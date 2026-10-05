@@ -71,25 +71,28 @@ async function reconcileShopify(estimates) {
   }
 }
 
-async function loadOperations(config) {
+async function loadOperations(config, section = "all") {
   const storedEstimates = await db.select(config, "print_estimates", { select:"*", order:"created_at.desc", limit:"500" });
-  const reconciliation = await reconcileShopify(storedEstimates.map(projectSummary));
-  const estimates = reconciliation.estimates;
-  const profiles = await db.select(config, "profiles", {
+  // Orders use the paginated /api/admin-orders endpoint. Customer and file views
+  // never trigger a Shopify request per row.
+  const estimates = storedEstimates.map(projectSummary);
+  const profiles = section === "all" ? await db.select(config, "profiles", {
     select:"id,name,company,email,is_active,created_at,updated_at", order:"updated_at.desc", limit:"200"
-  });
-  const cards = await db.select(config, "physical_cards", {
+  }) : [];
+  const cards = section === "all" ? await db.select(config, "physical_cards", {
     select:"id,profile_id,card_label,is_active,created_at", order:"created_at.desc", limit:"200"
-  });
+  }) : [];
   let activity = [];
   let auditAvailable = true;
-  try {
-    activity = await db.select(config, "admin_activity", {
-      select:"id,action,subject_type,subject_id,summary,metadata,created_at", order:"created_at.desc", limit:"100"
-    });
-  } catch (error) {
-    auditAvailable = false;
-    console.warn("Admin activity table unavailable", { statusCode:error?.statusCode });
+  if (section === "all" || section === "activity") {
+    try {
+      activity = await db.select(config, "admin_activity", {
+        select:"id,action,subject_type,subject_id,summary,metadata,created_at", order:"created_at.desc", limit:"100"
+      });
+    } catch (error) {
+      auditAvailable = false;
+      console.warn("Admin activity table unavailable", { statusCode:error?.statusCode });
+    }
   }
 
   const customers = customersFrom(estimates);
@@ -118,7 +121,7 @@ async function loadOperations(config) {
     activity,
     auditAvailable,
     cards:{ profiles, cards },
-    shopify:reconciliation.status
+    shopify:{ configured:null, orderAccess:"not_requested" }
   };
 }
 
@@ -132,7 +135,7 @@ module.exports = async function handler(req, res) {
     if (administrator.status !== "authorized") return auth.apiNotFound(res);
     const body = auth.requestBody(req);
     if (body.action !== "load") return res.status(400).json({ error:"Invalid action." });
-    return res.status(200).json(await loadOperations(config));
+    return res.status(200).json(await loadOperations(config, String(body.section || "all")));
   } catch (error) {
     console.error("Admin operations load failed", { message:error?.message });
     return res.status(500).json({ error:"The operations data could not be loaded." });

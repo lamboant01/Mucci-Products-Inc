@@ -17,7 +17,26 @@ const DRAFT_ORDER_PROJECTS = `#graphql
           name
           displayFinancialStatus
           displayFulfillmentStatus
+          totalPriceSet { shopMoney { amount currencyCode } }
         }
+      }
+    }
+  }
+`;
+
+const ORDER_DETAIL = `#graphql
+  query MucciAdminOrderDetail($id: ID!) {
+    node(id: $id) {
+      ... on Order {
+        id
+        createdAt
+        note
+        customer {
+          displayName
+          defaultEmailAddress { emailAddress }
+          defaultPhoneNumber { phoneNumber }
+        }
+        shippingAddress { formattedArea address1 address2 zip phone }
       }
     }
   }
@@ -113,8 +132,36 @@ function projectState(config, node, orderAccess) {
     shopify_order_number:order?.name || null,
     shopify_payment_status:order?.displayFinancialStatus || null,
     shopify_fulfillment_status:order?.displayFulfillmentStatus || null,
+    shopify_total_amount:order?.totalPriceSet?.shopMoney?.amount || null,
+    shopify_currency_code:order?.totalPriceSet?.shopMoney?.currencyCode || null,
     shopify_admin_url:adminUrl(config, order ? "order" : "draft", order?.id || node.id),
     shopify_order_access:orderAccess
+  };
+}
+
+async function orderDetails(orderId, environment = process.env, fetchImplementation = fetch) {
+  if (!ORDER_PATTERN.test(String(orderId || ""))) return null;
+  const config = configuration(environment);
+  if (!config) return null;
+  const token = await accessToken(config, fetchImplementation);
+  const data = await graphql(config, token, ORDER_DETAIL, { id:orderId }, fetchImplementation);
+  const order = data?.node;
+  if (!order?.id) return null;
+  return {
+    createdAt:order.createdAt || null,
+    note:order.note || null,
+    customer:order.customer ? {
+      name:order.customer.displayName || null,
+      email:order.customer.defaultEmailAddress?.emailAddress || null,
+      phone:order.customer.defaultPhoneNumber?.phoneNumber || null
+    } : null,
+    shippingAddress:order.shippingAddress ? {
+      area:order.shippingAddress.formattedArea || null,
+      address1:order.shippingAddress.address1 || null,
+      address2:order.shippingAddress.address2 || null,
+      postalCode:order.shippingAddress.zip || null,
+      phone:order.shippingAddress.phone || null
+    } : null
   };
 }
 
@@ -149,7 +196,9 @@ async function projectStates(draftOrderIds, environment = process.env, fetchImpl
 module.exports = {
   DRAFT_ORDER_PROJECTS,
   DRAFT_ORDER_PROJECTS_FALLBACK,
+  ORDER_DETAIL,
   adminUrl,
   configuration,
+  orderDetails,
   projectStates
 };
