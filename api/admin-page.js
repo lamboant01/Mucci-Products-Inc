@@ -34,7 +34,7 @@ function adminBody(section, user) {
   if (section === "cards") return `<section class="page-title"><p class="eyebrow">Private owner area</p><h1>Card Dashboard</h1><p>Manage the public details connected to your physical cards.</p></section><div id="dashboard" aria-live="polite"><p>Loading…</p></div>`;
   if (section === "estimates") return `<section class="page-title"><p class="eyebrow">Requests and estimates</p><h1>3D Print Requests</h1><p>Search submissions, review production details, update status, and prepare customer quotes.</p></section><div id="estimates-admin" aria-live="polite"><p>Loading…</p></div>`;
   const titles = {
-    dashboard:["Mucci Products", "Operations Dashboard", "What needs attention across paid orders, design, printing, quality control, and shipping."],
+    dashboard:["Mucci Products", "Operations Dashboard", "What needs attention across estimates, paid orders, design, printing, quality control, and shipping."],
     orders:["Production", "Orders", "Search and manage paid Shopify orders without mixing them with unconverted estimates."],
     customers:["Contacts", "Customers", "Customer contacts derived from estimate submissions and their request history."],
     files:["Private files", "Quote Files", "Open each private quote folder, view or download its files, and add late customer files without allowing deletion."],

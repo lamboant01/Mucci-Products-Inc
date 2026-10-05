@@ -9,6 +9,7 @@ const INTERNAL_STATUSES = Object.freeze([
 ]);
 const ORDER_PAYMENT_STATUSES = Object.freeze(["PAID", "PARTIALLY_PAID", "AUTHORIZED"]);
 const ACTUAL_ORDER = "or(shopify_order_id.not.is.null,shopify_payment_status.in.(PAID,PARTIALLY_PAID,AUTHORIZED))";
+const UNCONVERTED_ESTIMATE = "and(shopify_order_id.is.null,or(shopify_payment_status.is.null,shopify_payment_status.not.in.(PAID,PARTIALLY_PAID,AUTHORIZED)))";
 const LIST_FIELDS = [
   "id", "quote_code", "name", "email", "status", "created_at", "updated_at", "service_intent", "file_status",
   "quantity", "final_quantity", "material", "desired_colours", "final_price", "estimated_total_max",
@@ -181,6 +182,12 @@ function countParameters(extraClause) {
   return { select:"id", and:`(${clauses.join(",")})`, limit:"1" };
 }
 
+function estimateCountParameters(extraClause) {
+  const clauses = [UNCONVERTED_ESTIMATE];
+  if (extraClause) clauses.push(extraClause);
+  return { select:"id", and:`(${clauses.join(",")})`, limit:"1" };
+}
+
 async function dashboard(config) {
   const shopifyStatus = await refreshStaleCandidates(config);
   const recentCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -194,20 +201,42 @@ async function dashboard(config) {
     openOrders:"or(internal_status.is.null,internal_status.not.in.(COMPLETED,CANCELLED))",
     recentlyCompleted:`and(internal_status.eq.COMPLETED,internal_status_updated_at.gte.${recentCutoff})`
   };
-  const countEntries = await Promise.all(Object.entries(metrics).map(async ([key, clause]) => {
-    const result = await db.selectWithCount(config, "print_estimates", countParameters(clause));
-    return [key, result.count ?? 0];
-  }));
-  const [recent, attention] = await Promise.all([
+  const estimateMetrics = {
+    newEstimates:"status.eq.pending",
+    manualReview:"and(requires_manual_review.eq.true,status.not.in.(completed,declined))",
+    openEstimates:"status.not.in.(completed,declined)",
+    awaitingCustomer:"status.eq.awaiting_customer"
+  };
+  const [countEntries, estimateCountEntries] = await Promise.all([
+    Promise.all(Object.entries(metrics).map(async ([key, clause]) => {
+      const result = await db.selectWithCount(config, "print_estimates", countParameters(clause));
+      return [key, result.count ?? 0];
+    })),
+    Promise.all(Object.entries(estimateMetrics).map(async ([key, clause]) => {
+      const result = await db.selectWithCount(config, "print_estimates", estimateCountParameters(clause));
+      return [key, result.count ?? 0];
+    }))
+  ]);
+  const [recent, attention, recentEstimates, estimateAttention] = await Promise.all([
     db.select(config, "print_estimates", { ...countParameters(), select:LIST_FIELDS, order:"created_at.desc", limit:"10" }),
     db.select(config, "print_estimates", {
       select:LIST_FIELDS,
       and:`(${ACTUAL_ORDER},or(internal_status.is.null,internal_status.in.(NEW,AWAITING_CUSTOMER,READY_TO_PRINT,READY_TO_SHIP),shopify_reconciliation_error.not.is.null))`,
       order:"created_at.asc", limit:"30"
+    }),
+    db.select(config, "print_estimates", {
+      ...estimateCountParameters(), select:LIST_FIELDS, order:"created_at.desc", limit:"8"
+    }),
+    db.select(config, "print_estimates", {
+      ...estimateCountParameters("and(requires_manual_review.eq.true,status.not.in.(completed,declined))"),
+      select:LIST_FIELDS, order:"created_at.asc", limit:"8"
     })
   ]);
   return {
     metrics:Object.fromEntries(countEntries),
+    estimateMetrics:Object.fromEntries(estimateCountEntries),
+    estimateAttention:estimateAttention.map(publicOrder),
+    recentEstimates:recentEstimates.map(publicOrder),
     needsAttention:attention.map(publicOrder).filter((item) => item.attention_flags.length).slice(0, 8),
     recentOrders:recent.map(publicOrder),
     shopify:{ configured:shopifyStatus.configured, orderAccess:shopifyStatus.orderAccess }
@@ -215,6 +244,6 @@ async function dashboard(config) {
 }
 
 module.exports = {
-  ACTUAL_ORDER, INTERNAL_STATUSES, attentionFlags, cachePatch, dashboard, fileCount,
+  ACTUAL_ORDER, UNCONVERTED_ESTIMATE, INTERNAL_STATUSES, attentionFlags, cachePatch, dashboard, estimateCountParameters, fileCount,
   listOrders, listParameters, persistState, publicOrder, reconcileRows, refreshStaleCandidates
 };

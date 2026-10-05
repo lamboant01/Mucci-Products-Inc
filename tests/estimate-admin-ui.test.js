@@ -32,7 +32,7 @@ test("admin workflow includes review safety, copy actions, filters, and manual E
   const source = read("estimates.js");
   const config = fs.readFileSync(path.join(__dirname, "..", "config.js"), "utf8");
   for (const phrase of [
-    "Prepare Etsy Listing", "Final Etsy Price", "Etsy Listing Quantity", "Admin override",
+    "Prepare Etsy Listing", "Final customer price", "Etsy Listing Quantity", "Admin override",
     "Copy Quote Code", "Copy Customer Email", "Copy Description", "Copy Etsy Reply",
     "Copy All Etsy Details", "Open Etsy Messages", "Mark Reviewed", "Mark Completed", "Decline"
   ]) assert.match(source, new RegExp(phrase));
@@ -75,4 +75,18 @@ test("Orders tab uses server-paginated workflow data and authenticated signed cu
   assert.match(projects, /projectFiles\(estimate\)\.find/);
   assert.doesNotMatch(operations, /data-path=/);
   assert.doesNotMatch(operations, /SUPABASE_SERVICE_ROLE_KEY|SHOPIFY_API_SECRET/);
+});
+
+test("dashboard separates estimate work from paid orders", () => {
+  const operations = fs.readFileSync(path.join(__dirname, "..", "admin", "operations.js"), "utf8");
+  for (const phrase of ["Estimate Pipeline", "Manual Review Required", "Recent Estimates", "Paid Orders"]) {
+    assert.match(operations, new RegExp(phrase));
+  }
+});
+
+test("estimate review no longer exposes the Stripe test invoice action", () => {
+  const source = read("estimates.js");
+  const server = readApi("admin-estimates.js");
+  assert.doesNotMatch(source, /Stripe test invoice|send-stripe-invoice|send_stripe_invoice/i);
+  assert.doesNotMatch(server, /send_stripe_invoice|_stripe-invoicing/i);
 });

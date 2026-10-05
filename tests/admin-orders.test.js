@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { attentionFlags, cachePatch, listParameters, publicOrder } = require("../api/_admin-orders");
+const { attentionFlags, cachePatch, estimateCountParameters, listParameters, publicOrder } = require("../api/_admin-orders");
 
 test("attention flags are derived from real workflow, file, Shopify, and service state", () => {
   assert.deepEqual(attentionFlags({
@@ -50,4 +50,11 @@ test("Shopify cache patches store only normalized admin read fields and a generi
   assert.equal(result.shopify_total_amount, 88.5);
   assert.equal(result.shopify_reconciliation_error, null);
   assert.ok(Date.parse(result.shopify_reconciled_at));
+});
+
+test("estimate dashboard queries exclude paid or converted Shopify orders", () => {
+  const result = estimateCountParameters("status.eq.pending");
+  assert.match(result.and, /shopify_order_id\.is\.null/);
+  assert.match(result.and, /shopify_payment_status\.not\.in\.\(PAID,PARTIALLY_PAID,AUTHORIZED\)/);
+  assert.match(result.and, /status\.eq\.pending/);
 });

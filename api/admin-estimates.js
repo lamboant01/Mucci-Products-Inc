@@ -6,7 +6,6 @@ const listing = require("./_etsy-listing");
 const estimateDrive = require("./estimate-drive");
 const drive = require("./_google-drive");
 const driveConnection = require("./_google-drive-connection");
-const stripeInvoicing = require("./_stripe-invoicing");
 
 const QUOTE_PATTERN = /^MP-[A-HJ-NP-Z2-9]{5}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -124,51 +123,6 @@ async function handleAction(config, user, body) {
       });
       await logActivity(config, user, { action:"quote_prepared", estimateId, summary:`Customer quote prepared for ${estimate.quote_code}.` });
       return { prepared, snapshot:snapshots?.[0] || null, estimate:{ ...estimate, status:"etsy_prepared" } };
-    }
-    case "send_stripe_invoice": {
-      const estimateId = uuid(body.estimateId);
-      if (!estimateId) throw new Error("Invalid estimate.");
-      const values = reviewValues(body);
-      const customerEmail = stripeInvoicing.email(body.customerEmail);
-      const current = await findById(config, estimateId);
-      if (!current) throw new Error("Estimate not found.");
-      if (current.stripe_invoice_id && Number(current.final_price) !== values.finalPrice) {
-        throw new Error("The final price cannot change after a Stripe invoice has been created.");
-      }
-
-      const saved = current.stripe_invoice_id ? [current] : await db.rpc(config, "admin_save_print_estimate_review", {
-        p_estimate_id:estimateId, p_final_price:values.finalPrice, p_final_quantity:values.physicalQuantity,
-        p_admin_notes:values.adminNotes || null, p_clarification_notes:values.clarificationNotes || null,
-        p_processing_time_override:values.processingOverride || null
-      });
-      const estimate = saved?.[0] || null;
-      if (!estimate) throw new Error("Estimate not found.");
-
-      const stripeConfig = stripeInvoicing.configuration();
-      const stripe = stripeInvoicing.client(stripeConfig);
-      const result = await stripeInvoicing.createOrSendInvoice(stripe, estimate, customerEmail, stripeConfig.daysUntilDue);
-      let invoice = result;
-      let customerId = null;
-      if (result.draftInvoice) {
-        customerId = result.customerId;
-        await db.patch(config, "print_estimates", { id:`eq.${estimateId}` }, {
-          email:customerEmail,
-          ...stripeInvoicing.invoiceSnapshot(result.draftInvoice, customerId)
-        });
-        invoice = await stripe.invoices.sendInvoice(result.draftInvoice.id, {}, { idempotencyKey:`mucci-send-${estimate.id}` });
-      }
-
-      const updated = await db.patch(config, "print_estimates", { id:`eq.${estimateId}` }, {
-        email:customerEmail,
-        ...stripeInvoicing.invoiceSnapshot(invoice, customerId)
-      });
-      const savedEstimate = updated?.[0] || null;
-      await logActivity(config, user, {
-        action:"stripe_invoice_sent", estimateId,
-        summary:`Stripe test invoice sent for ${estimate.quote_code}.`,
-        metadata:{ stripe_invoice_id:invoice.id, mode:"test" }
-      });
-      return { estimate:savedEstimate, invoice:{ id:invoice.id, status:invoice.status, hostedInvoiceUrl:invoice.hosted_invoice_url || null } };
     }
     case "mirror_drive": {
       const estimateId = uuid(body.estimateId);

@@ -209,6 +209,9 @@
 .operations-panel h2,
 .customer-card h2 { margin: 0; }
 .operations-panel .section-heading a { color: #087c7a; font-weight: 800; }
+.dashboard-group + .dashboard-group { margin-top: 34px; }
+.dashboard-group > .section-heading { margin-bottom: 14px; }
+.dashboard-group > .section-heading a { color: #087c7a; font-weight: 800; }
 .operations-alert { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 24px; padding: 16px 18px; border-left: 4px solid #d49f45; color: #5e4518; background: #fff8e8; }
 .operations-alert span { flex: 1; }
 .operations-alert a { color: inherit; font-weight: 800; }
@@ -370,6 +373,7 @@
 .pagination { display: flex; align-items: center; justify-content: flex-end; gap: 14px; margin-top: 18px; }
 .pagination .button { min-width: 100px; }
 .status-new, .status-reviewing { background: #e6f1ff; }
+.status-warning { color: #7a2d0b; background: #fff0e7; }
 .status-awaiting_customer { background: #fff3cf; }
 .status-designing, .status-ready_to_print { background: #e9e5ff; }
 .status-printing, .status-post_processing, .status-quality_check { color: #fff; background: #0f7180; }

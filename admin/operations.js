@@ -48,6 +48,11 @@
     return `<div class="responsive-table order-table"><table><thead><tr><th>Order</th><th>Quote</th><th>Customer</th><th>Service</th><th>Internal Status</th><th>Shopify Status</th><th>Total</th><th>Files</th><th>Date</th><th>Action</th></tr></thead><tbody>${items.map((item) => `<tr><td data-label="Order"><strong>${escapeHtml(item.shopify_order_number || "Pending conversion")}</strong></td><td data-label="Quote">${escapeHtml(item.quote_code)}</td><td data-label="Customer">${escapeHtml(item.name || "Name not provided")}<small>${escapeHtml(item.email || "No email provided")}</small></td><td data-label="Service">${escapeHtml(service(item.service_intent || item.file_status))}</td><td data-label="Internal status">${badge(item.internal_status || "NEW")}</td><td data-label="Shopify status">${item.shopify_payment_status ? badge(item.shopify_payment_status) : "Not available"}<small>${escapeHtml(item.shopify_fulfillment_status ? status(item.shopify_fulfillment_status) : "")}</small></td><td data-label="Total">${escapeHtml(money(item.shopify_total_amount ?? item.final_price ?? item.estimated_total_max))}</td><td data-label="Files">${escapeHtml(item.file_count ?? fileCount(item))}</td><td data-label="Date">${escapeHtml(date(item.created_at))}</td><td data-label="Action"><a class="table-link" href="${projectUrl(item.id)}">Open order</a></td></tr>`).join("")}</tbody></table></div>`;
   }
 
+  function estimateRows(items, empty = "No estimates found.") {
+    if (!items.length) return `<div class="empty-state">${escapeHtml(empty)}</div>`;
+    return `<div class="responsive-table order-table estimate-summary-table"><table><thead><tr><th>Quote</th><th>Customer</th><th>Status</th><th>Review</th><th>Shopify</th><th>Estimated Total</th><th>Date</th><th>Action</th></tr></thead><tbody>${items.map((item) => `<tr><td data-label="Quote"><strong>${escapeHtml(item.quote_code)}</strong></td><td data-label="Customer">${escapeHtml(item.name || "Name not provided")}<small>${escapeHtml(item.email || "No email provided")}</small></td><td data-label="Status">${badge(item.status || "pending")}</td><td data-label="Review">${item.requires_manual_review ? '<span class="status-badge status-warning">Manual review</span>' : "Standard"}</td><td data-label="Shopify">${escapeHtml(item.shopify_order_number || (item.shopify_draft_order_id ? "Draft linked" : "Not linked"))}</td><td data-label="Estimated total">${escapeHtml(money(item.final_price ?? item.estimated_total_max))}</td><td data-label="Date">${escapeHtml(date(item.created_at))}</td><td data-label="Action"><a class="table-link" href="${estimateUrl(item.quote_code)}">Review estimate</a></td></tr>`).join("")}</tbody></table></div>`;
+  }
+
   function fileCount(item) {
     const models = Math.max(Number(item.uploaded_file_count || 0), Array.isArray(item.model_files) ? item.model_files.filter((file) => file?.path).length : 0, item.file_path ? 1 : 0);
     return models + (Array.isArray(item.reference_files) ? item.reference_files.length : 0);
@@ -59,7 +64,13 @@
   }
 
   function renderDashboard(data) {
-    const cards = [
+    const estimateCards = [
+      ["New Estimates", data.estimateMetrics.newEstimates, "/admin/estimates"],
+      ["Manual Review", data.estimateMetrics.manualReview, "/admin/estimates"],
+      ["Open Estimates", data.estimateMetrics.openEstimates, "/admin/estimates"],
+      ["Awaiting Customer", data.estimateMetrics.awaitingCustomer, "/admin/estimates"]
+    ];
+    const orderCards = [
       ["New Orders", data.metrics.newOrders, "/admin/orders?status=NEW"],
       ["Awaiting Review", data.metrics.awaitingReview, "/admin/orders?status=REVIEWING"],
       ["Design Required", data.metrics.designRequired, "/admin/orders?status=DESIGNING"],
@@ -70,9 +81,12 @@
       ["Recently Completed", data.metrics.recentlyCompleted, "/admin/orders?status=COMPLETED"]
     ];
     const notice = data.shopify?.configured === false ? '<div class="operations-alert"><strong>Shopify reconciliation is not configured.</strong><span>Stored Supabase project information remains available.</span></div>' : data.shopify?.orderAccess === "read_orders_required" ? '<div class="operations-alert"><strong>Shopify access needs reauthorization.</strong><span>Grant <code>read_orders</code> to classify converted orders and show payment and fulfillment.</span></div>' : data.shopify?.orderAccess === "unavailable" ? '<div class="operations-alert"><strong>Shopify data unavailable.</strong><span>Cached order data remains available.</span></div>' : "";
-    root.innerHTML = `${notice}<div class="metric-grid">${cards.map(([label, value, href]) => `<a class="metric-card" href="${href}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>View details</small></a>`).join("")}</div>
+    root.innerHTML = `${notice}<section class="dashboard-group"><div class="section-heading"><div><p class="eyebrow">Quote pipeline</p><h2>Estimate Pipeline</h2></div><a href="/admin/estimates">All estimates</a></div><div class="metric-grid">${estimateCards.map(([label, value, href]) => `<a class="metric-card" href="${href}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>View estimates</small></a>`).join("")}</div>
+      <div class="operations-grid">${data.estimateAttention.length ? `<section class="operations-panel wide"><div class="section-heading"><div><p class="eyebrow">Estimate attention</p><h2>Manual Review Required</h2></div><a href="/admin/estimates">Review estimates</a></div><div class="attention-list">${data.estimateAttention.map((item) => `<article><div><strong>${escapeHtml(item.quote_code)}</strong><small>${escapeHtml(item.name || "Name not provided")} · ${escapeHtml(money(item.final_price ?? item.estimated_total_max))}</small></div><a class="table-link" href="${estimateUrl(item.quote_code)}">Review estimate</a></article>`).join("")}</div></section>` : ""}
+      <section class="operations-panel wide"><div class="section-heading"><div><p class="eyebrow">Latest submissions</p><h2>Recent Estimates</h2></div><a href="/admin/estimates">All estimates</a></div>${estimateRows(data.recentEstimates, "No estimates are available yet.")}</section></div></section>
+      <section class="dashboard-group"><div class="section-heading"><div><p class="eyebrow">Production pipeline</p><h2>Paid Orders</h2></div><a href="/admin/orders">All orders</a></div><div class="metric-grid">${orderCards.map(([label, value, href]) => `<a class="metric-card" href="${href}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>View details</small></a>`).join("")}</div>
       <div class="operations-grid"><section class="operations-panel wide"><div class="section-heading"><div><p class="eyebrow">Action queue</p><h2>Needs Attention</h2></div><a href="/admin/orders?attention=true">Filtered orders</a></div>${data.needsAttention.length ? `<div class="attention-list">${data.needsAttention.map((item) => `<article><div><strong>${escapeHtml(item.shopify_order_number || item.quote_code)}</strong><small>${escapeHtml(item.name || "Name not provided")} · ${escapeHtml((item.attention_flags || []).join(" · "))}</small></div><a class="table-link" href="${projectUrl(item.id)}">Open order</a></article>`).join("")}</div>` : '<div class="empty-state">No orders currently meet the defined attention rules.</div>'}</section>
-      <section class="operations-panel wide"><div class="section-heading"><div><p class="eyebrow">Latest</p><h2>Recent Orders</h2></div><a href="/admin/orders">All orders</a></div>${requestRows(data.recentOrders, "No paid orders are available yet.")}</section></div>`;
+      <section class="operations-panel wide"><div class="section-heading"><div><p class="eyebrow">Latest</p><h2>Recent Orders</h2></div><a href="/admin/orders">All orders</a></div>${requestRows(data.recentOrders, "No paid orders are available yet.")}</section></div></section>`;
   }
 
   function customerCards(items) {

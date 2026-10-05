@@ -135,8 +135,7 @@
       <section class="review-section"><h3>Customer notes</h3><p class="notes">${escapeHtml(estimate.notes || "No customer notes provided.")}</p></section>
       <section class="review-section"><h3>Shopify conversion</h3><dl class="recent-grid"><div><dt>Draft Order status</dt><dd>${escapeHtml(estimate.shopify_draft_order_status || "Not created")}</dd></div><div><dt>Converted Order</dt><dd>${escapeHtml(estimate.shopify_order_number || "Not converted")}</dd></div><div><dt>Payment</dt><dd>${escapeHtml(estimate.shopify_payment_status || "Not available")}</dd></div><div><dt>Fulfillment</dt><dd>${escapeHtml(estimate.shopify_fulfillment_status || "Not available")}</dd></div></dl>${estimate.shopify_draft_order_id ? `<a class="button button-secondary" href="/admin/orders?project=${encodeURIComponent(estimate.id)}">Open order workspace</a>` : '<p class="help-text">This estimate has not created a Shopify Draft Order.</p>'}</section>
       <form id="review-form" class="review-form">
-        <section class="review-section"><h3>Final customer order</h3><div class="form-grid"><label>Final Etsy Price / Stripe invoice amount (CAD)<input required name="final_price" inputmode="decimal" value="${finalPrice(estimate).toFixed(2)}" pattern="[0-9]+(?:\\.[0-9]{1,2})?" aria-describedby="price-help"${estimate.stripe_invoice_id ? " readonly" : ""}></label><label>Final Quantity<input required name="final_quantity" type="number" min="1" max="999" value="${finalQuantity(estimate)}"></label><label>Etsy Listing Quantity<input required name="listing_quantity" type="number" min="1" max="999" value="1"><small>This Etsy listing represents the complete custom project.</small></label><label>Processing time override<input name="processing_time_override" maxlength="120" value="${escapeHtml(estimate.processing_time_override || "")}" placeholder="${escapeHtml(processing)}"><small>Leave blank to use the suggested window.</small></label></div><p id="price-help" class="help-text">Positive amount with a maximum of two decimal places. The amount is locked after a Stripe invoice is created.</p></section>
-        <section class="review-section"><h3>Stripe test invoice</h3><div class="form-grid"><label>Customer email<input name="invoice_email" type="email" maxlength="254" autocomplete="email" value="${escapeHtml(estimate.email || "")}"${estimate.stripe_invoice_id ? " readonly" : ""}><small>Stripe emails a secure Hosted Invoice Page. Card data never enters this site.</small></label><div><strong>Status</strong><p>${escapeHtml(estimate.stripe_invoice_status ? label(estimate.stripe_invoice_status) : "Not created")}</p></div></div><div class="card-actions"><button class="button button-primary" id="send-stripe-invoice" type="button">${estimate.stripe_invoice_id ? "Refresh / resend test invoice" : "Send Stripe test invoice"}</button>${estimate.stripe_hosted_invoice_url ? `<a class="button button-secondary" href="${escapeHtml(estimate.stripe_hosted_invoice_url)}" target="_blank" rel="noopener noreferrer">Open hosted invoice</a>` : ""}${estimate.stripe_invoice_pdf ? `<a class="button button-secondary" href="${escapeHtml(estimate.stripe_invoice_pdf)}" target="_blank" rel="noopener noreferrer">Open invoice PDF</a>` : ""}</div><p id="stripe-invoice-status" class="form-status" role="status"></p></section>
+        <section class="review-section"><h3>Final customer order</h3><div class="form-grid"><label>Final customer price (CAD)<input required name="final_price" inputmode="decimal" value="${finalPrice(estimate).toFixed(2)}" pattern="[0-9]+(?:\\.[0-9]{1,2})?" aria-describedby="price-help"></label><label>Final Quantity<input required name="final_quantity" type="number" min="1" max="999" value="${finalQuantity(estimate)}"></label><label>Etsy Listing Quantity<input required name="listing_quantity" type="number" min="1" max="999" value="1"><small>This Etsy listing represents the complete custom project.</small></label><label>Processing time override<input name="processing_time_override" maxlength="120" value="${escapeHtml(estimate.processing_time_override || "")}" placeholder="${escapeHtml(processing)}"><small>Leave blank to use the suggested window.</small></label></div><p id="price-help" class="help-text">Positive amount with a maximum of two decimal places.</p></section>
         <section class="review-section"><h3>Private review notes</h3><label>Admin notes<textarea name="admin_notes" rows="3" maxlength="5000">${escapeHtml(estimate.admin_notes || "")}</textarea></label><label>Clarification needed before listing<textarea name="clarification_notes" rows="3" maxlength="3000" placeholder="Leave blank when no clarification is needed.">${escapeHtml(estimate.clarification_notes || "")}</textarea></label><button class="button button-secondary" id="save-review" type="button">Save Review Details</button><p id="save-status" class="form-status" role="status"></p></section>
         <section class="review-section"><h3>Estimate review checklist</h3><div id="review-checklist" class="checklist">${checklistMarkup(estimate)}</div><label class="override-check"><input type="checkbox" name="admin_override"> Admin override: prepare despite unchecked items</label></section>
         <div class="primary-actions"><button class="button button-primary prepare-button" id="prepare-listing" type="submit" disabled>Prepare Etsy Listing</button><button class="button button-secondary" type="button" data-status-action="reviewed">Mark Reviewed</button><button class="button button-secondary" type="button" data-status-action="completed">Mark Completed</button><button class="button button-danger" type="button" data-status-action="declined">Decline</button></div>
@@ -245,7 +244,6 @@
       try { await saveReviewDetails(); } catch (error) { document.querySelector("#save-status").textContent = error.message; }
       button.disabled = false;
     });
-    document.querySelector("#send-stripe-invoice").addEventListener("click", sendStripeInvoice);
     form.addEventListener("submit", prepareListing);
     document.querySelectorAll("[data-status-action]").forEach((button) => button.addEventListener("click", () => setStatus(button.dataset.statusAction, button)));
     document.querySelector("#update-status").addEventListener("click", (event) => setStatus(document.querySelector("#internal-status").value, event.currentTarget));
@@ -253,29 +251,6 @@
     document.querySelector("#organize-drive")?.addEventListener("click", organizeDrive);
     bindCopyButtons();
     if (generatedPackage) document.querySelector("#etsy-package")?.scrollIntoView({ behavior:"smooth", block:"start" });
-  }
-
-  async function sendStripeInvoice(event) {
-    const button = event.currentTarget;
-    const status = document.querySelector("#stripe-invoice-status");
-    const customerEmail = String(document.querySelector('[name="invoice_email"]').value || "").trim();
-    if (!customerEmail) {
-      status.textContent = "Enter the customer's email before sending an invoice.";
-      return;
-    }
-    if (!window.confirm(`Send a Stripe test invoice for ${money(valuesFromReviewForm().finalPrice)} CAD to ${customerEmail}?`)) return;
-    button.disabled = true;
-    status.textContent = "Creating and sending the Stripe test invoice…";
-    try {
-      const values = valuesFromReviewForm();
-      const payload = await apiRequest("send_stripe_invoice", { estimateId:activeEstimate.id, customerEmail, ...values });
-      if (!payload.estimate || !payload.invoice) throw new Error("The Stripe invoice could not be created.");
-      activeEstimate = payload.estimate;
-      renderEstimateReview(null, `Stripe test invoice ${payload.invoice.status || "sent"}.`);
-    } catch (error) {
-      status.textContent = errorMessage(error, "The Stripe test invoice could not be sent.");
-      button.disabled = false;
-    }
   }
 
   async function prepareListing(event) {
