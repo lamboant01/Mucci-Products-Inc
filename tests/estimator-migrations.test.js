@@ -27,3 +27,14 @@ test("operations migration adds only server-private audit data and lightweight o
   assert.doesNotMatch(sql, /create table .*customers|create table .*orders/i);
   assert.doesNotMatch(sql, /password|access_token|api_key/i);
 });
+
+test("Shopify Draft Order migration preserves server-only linkage and atomic checkout claims", () => {
+  const sql = migration("025_shopify_draft_orders.sql");
+  assert.match(sql, /add column if not exists shopify_draft_order_id text/i);
+  assert.match(sql, /create or replace function public\.claim_shopify_draft_order/i);
+  assert.match(sql, /create or replace function public\.complete_shopify_draft_order/i);
+  assert.match(sql, /create or replace function public\.fail_shopify_draft_order/i);
+  assert.match(sql, /grant execute on function public\.claim_shopify_draft_order\(text,uuid,uuid\) to service_role/i);
+  assert.match(sql, /revoke all on function public\.claim_shopify_draft_order\(text,uuid,uuid\) from public, anon, authenticated/i);
+  assert.doesNotMatch(sql, /drop\s+(table|schema)|service_role_key|api_secret/i);
+});
