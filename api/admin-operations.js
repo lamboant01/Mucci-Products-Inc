@@ -2,14 +2,7 @@
 
 const auth = require("./_admin-auth");
 const db = require("./_admin-supabase");
-
-const ESTIMATE_SELECT = [
-  "id", "quote_code", "name", "email", "status", "created_at", "updated_at",
-  "quantity", "final_quantity", "material", "final_price", "estimated_price", "estimated_price_max",
-  "estimated_production_hours", "estimated_production_hours_max", "requires_manual_review",
-  "file_path", "original_file_name", "reference_files", "drive_file_id", "drive_reference_files", "drive_web_view_link", "drive_mirrored_at",
-  "email_notification_sent_at", "admin_notes", "clarification_notes", "completed_at"
-].join(",");
+const shopify = require("./_shopify-admin");
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
@@ -45,17 +38,43 @@ function quoteFoldersFrom(estimates) {
   return estimates.map((item) => ({
     id:item.id, quote_code:item.quote_code, name:item.name, created_at:item.created_at,
     original_file_name:item.original_file_name,
-    source_file_count:(item.file_path ? 1 : 0) + (Array.isArray(item.reference_files) ? item.reference_files.length : 0),
+    source_file_count:Math.max(Number(item.uploaded_file_count || 0), Array.isArray(item.model_files) ? item.model_files.filter((file) => file?.path).length : 0, item.file_path ? 1 : 0) + (Array.isArray(item.reference_files) ? item.reference_files.length : 0),
     drive_file_count:(item.drive_file_id ? 1 : 0) + (Array.isArray(item.drive_reference_files) ? item.drive_reference_files.length : 0),
     drive_web_view_link:item.drive_web_view_link,
     drive_status:item.drive_mirrored_at ? "mirrored" : item.drive_web_view_link ? "linked" : "not_mirrored"
   }));
 }
 
+function projectSummary(item) {
+  const allowed = [
+    "id", "quote_code", "name", "email", "status", "created_at", "updated_at", "service_intent", "file_status",
+    "quantity", "final_quantity", "material", "desired_colours", "final_price", "estimated_price", "estimated_price_max", "estimated_total_max",
+    "estimated_production_hours", "estimated_production_hours_max", "total_print_hours", "total_filament_grams", "requires_manual_review",
+    "file_path", "original_file_name", "model_files", "uploaded_file_count", "reference_files", "drive_file_id", "drive_reference_files",
+    "drive_web_view_link", "drive_mirrored_at", "email_notification_sent_at", "admin_notes", "clarification_notes", "completed_at",
+    "shopify_draft_order_id", "shopify_draft_order_status", "shopify_draft_order_created_at"
+  ];
+  return Object.fromEntries(allowed.filter((key) => Object.hasOwn(item, key)).map((key) => [key, item[key]]));
+}
+
+async function reconcileShopify(estimates) {
+  const ids = estimates.map((item) => item.shopify_draft_order_id).filter(Boolean);
+  try {
+    const result = await shopify.projectStates(ids);
+    return {
+      estimates:estimates.map((item) => ({ ...item, ...(result.projects.get(item.shopify_draft_order_id) || {}) })),
+      status:{ configured:result.configured, orderAccess:result.orderAccess }
+    };
+  } catch (error) {
+    console.warn("Shopify order reconciliation unavailable", { message:error?.message });
+    return { estimates, status:{ configured:true, orderAccess:"unavailable" } };
+  }
+}
+
 async function loadOperations(config) {
-  const estimates = await db.select(config, "print_estimates", {
-    select:ESTIMATE_SELECT, order:"created_at.desc", limit:"500"
-  });
+  const storedEstimates = await db.select(config, "print_estimates", { select:"*", order:"created_at.desc", limit:"500" });
+  const reconciliation = await reconcileShopify(storedEstimates.map(projectSummary));
+  const estimates = reconciliation.estimates;
   const profiles = await db.select(config, "profiles", {
     select:"id,name,company,email,is_active,created_at,updated_at", order:"updated_at.desc", limit:"200"
   });
@@ -76,7 +95,7 @@ async function loadOperations(config) {
   const customers = customersFrom(estimates);
   const activeStatuses = new Set(["accepted", "in_production"]);
   const awaitingStatuses = new Set(["pending", "reviewed", "etsy_prepared", "awaiting_customer"]);
-  const orders = estimates.filter((item) => activeStatuses.has(item.status) || item.status === "completed");
+  const orders = estimates;
   const files = quoteFoldersFrom(estimates);
   const actionRequired = estimates.filter((item) => awaitingStatuses.has(item.status) || item.requires_manual_review);
 
@@ -98,7 +117,8 @@ async function loadOperations(config) {
     files,
     activity,
     auditAvailable,
-    cards:{ profiles, cards }
+    cards:{ profiles, cards },
+    shopify:reconciliation.status
   };
 }
 
@@ -122,3 +142,5 @@ module.exports = async function handler(req, res) {
 module.exports.customersFrom = customersFrom;
 module.exports.loadOperations = loadOperations;
 module.exports.quoteFoldersFrom = quoteFoldersFrom;
+module.exports.projectSummary = projectSummary;
+module.exports.reconcileShopify = reconcileShopify;

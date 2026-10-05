@@ -13,7 +13,7 @@ function configuration() {
     supabaseUrl:String(process.env.SUPABASE_URL || "").replace(/\/$/, ""),
     anonKey:process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
     serviceKey:process.env.SUPABASE_SERVICE_ROLE_KEY,
-    siteUrl:String(process.env.PUBLIC_SITE_URL || "https://mucciproducts.com").replace(/\/$/, ""),
+    siteUrl:String(process.env.ADMIN_SITE_URL || process.env.PUBLIC_SITE_URL || "https://mucciproducts.com").replace(/\/$/, ""),
     adminEmail:String(process.env.ADMIN_EMAIL || "").trim().toLowerCase()
   };
   if (!values.supabaseUrl || !values.anonKey || !values.serviceKey) throw configurationError("Supabase server configuration is missing.");

@@ -33,7 +33,7 @@ function adminBody(section, user) {
   if (section === "estimates") return `<section class="page-title"><p class="eyebrow">Requests and estimates</p><h1>3D Print Requests</h1><p>Search submissions, review production details, update status, and prepare customer quotes.</p></section><div id="estimates-admin" aria-live="polite"><p>Loading…</p></div>`;
   const titles = {
     dashboard:["Operations overview", "Dashboard", "Current requests, production work, customers, files, and recent administrative activity."],
-    orders:["Production", "Orders / Projects", "Accepted, in-production, and completed estimate records. No separate ERP records are created."],
+    orders:["Production", "Orders / Projects", "Search every estimator project by quote, Shopify order, customer, email, project ID, status, or service."],
     customers:["Contacts", "Customers", "Customer contacts derived from estimate submissions and their request history."],
     files:["Private files", "Quote Files", "Open each private quote folder, view or download its files, and add late customer files without allowing deletion."],
     activity:["Audit trail", "Admin Activity", "Important administrator changes. Secrets and authentication tokens are never recorded."]

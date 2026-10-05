@@ -7,6 +7,7 @@ const authStart = require("../api/admin-auth-start");
 const authCallback = require("../api/admin-auth-callback");
 const adminPage = require("../api/admin-page");
 const adminCards = require("../api/admin-cards");
+const adminProjects = require("../api/admin-projects");
 
 const root = path.join(__dirname, "..");
 const read = (name) => fs.readFileSync(path.join(root, name), "utf8");
@@ -53,6 +54,17 @@ test("server configuration no longer depends on a hidden admin route", { concurr
     delete process.env.ADMIN_ROUTE_SLUG;
     assert.equal(auth.configuration().siteUrl, "https://mucciproducts.com");
     assert.equal(auth.configuration().routeSlug, undefined);
+  } finally {
+    process.env = original;
+  }
+});
+
+test("admin origin can move to a subdomain without changing the public site URL", { concurrency:false }, () => {
+  const original = { ...process.env };
+  try {
+    Object.assign(process.env, environment({ ADMIN_SITE_URL:"https://admin.mucciproducts.com" }));
+    assert.equal(auth.configuration().siteUrl, "https://admin.mucciproducts.com");
+    assert.equal(process.env.PUBLIC_SITE_URL, "https://mucciproducts.com");
   } finally {
     process.env = original;
   }
@@ -261,6 +273,10 @@ test("unauthenticated management APIs return 404 instead of revealing authorizat
   await adminCards({ method:"POST", headers:{ origin:"https://mucciproducts.com" }, body:{ action:"list" } }, res);
   assert.equal(res.statusCode, 404);
   assert.deepEqual(res.body, { error:"Not found." });
+  const projects = responseRecorder();
+  await adminProjects({ method:"POST", headers:{ origin:"https://mucciproducts.com" }, body:{ action:"load", estimateId:ADMIN_ID } }, projects);
+  assert.equal(projects.statusCode, 404);
+  assert.deepEqual(projects.body, { error:"Not found." });
 });
 
 test("authenticated but unauthorized management API calls also return 404", { concurrency:false }, async (context) => {
@@ -296,14 +312,19 @@ test("browser management clients contain no Supabase administrator identity or d
   assert.match(clients, /\/api\/admin-estimates/);
   assert.match(clients, /\/api\/admin-cards/);
   assert.match(clients, /\/api\/admin-operations/);
+  assert.match(clients, /\/api\/admin-projects/);
 });
 
 test("operations API and pages remain behind server authorization and search blocking", () => {
   const api = read("api/admin-operations.js");
+  const projects = read("api/admin-projects.js");
   const page = read("api/admin-page.js");
   assert.match(api, /authenticateAdmin/);
   assert.match(api, /requestIsSameOrigin/);
   assert.match(api, /apiNotFound/);
+  assert.match(projects, /authenticateAdmin/);
+  assert.match(projects, /requestIsSameOrigin/);
+  assert.match(projects, /apiNotFound/);
   assert.match(page, /noindex,nofollow,noarchive,nosnippet/i);
   assert.doesNotMatch(api, /process\.env\.(?:SUPABASE_SERVICE_ROLE_KEY|GOOGLE_DRIVE_CLIENT_SECRET)/);
 });

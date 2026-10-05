@@ -19,6 +19,8 @@
   };
   const status = (value) => labels[value] || String(value || "Unknown").replaceAll("_", " ");
   const estimateUrl = (code) => `/admin/estimates?quote=${encodeURIComponent(code)}`;
+  const projectUrl = (id) => `/admin/orders?project=${encodeURIComponent(id)}`;
+  const service = (value) => ({ PRINT_ONLY:"Print only", DESIGN_ONLY:"Design only", DESIGN_AND_PRINT:"Design and print" })[value] || status(value);
 
   async function api(endpoint, body) {
     const response = await fetch(endpoint, {
@@ -39,7 +41,12 @@
 
   function requestRows(items, empty = "No records found.") {
     if (!items.length) return `<div class="empty-state">${escapeHtml(empty)}</div>`;
-    return `<div class="responsive-table"><table><thead><tr><th>Reference</th><th>Customer</th><th>Status</th><th>Submitted</th><th>Quantity</th><th>Value</th><th></th></tr></thead><tbody>${items.map((item) => `<tr><td><strong>${escapeHtml(item.quote_code)}</strong></td><td>${escapeHtml(item.name || "Name not provided")}<small>${escapeHtml(item.email || "No email provided")}</small></td><td>${badge(item.status)}</td><td>${escapeHtml(date(item.created_at))}</td><td>${escapeHtml(item.final_quantity || item.quantity)}</td><td>${escapeHtml(money(item.final_price || item.estimated_price_max || item.estimated_price))}</td><td><a class="table-link" href="${estimateUrl(item.quote_code)}">Open</a></td></tr>`).join("")}</tbody></table></div>`;
+    return `<div class="responsive-table"><table><thead><tr><th>Shopify / Quote</th><th>Customer</th><th>Service</th><th>Project</th><th>Payment / fulfillment</th><th>Files</th><th>Submitted</th><th>Total</th><th></th></tr></thead><tbody>${items.map((item) => `<tr><td><strong>${escapeHtml(item.shopify_order_number || item.shopify_draft_order_name || "No Shopify order")}</strong><small>${escapeHtml(item.quote_code)}</small></td><td>${escapeHtml(item.name || "Name not provided")}<small>${escapeHtml(item.email || "No email provided")}</small></td><td>${escapeHtml(service(item.service_intent || item.file_status))}</td><td>${badge(item.status)}</td><td>${escapeHtml(status(item.shopify_payment_status || item.shopify_draft_order_live_status || item.shopify_draft_order_status || "Not linked"))}<small>${escapeHtml(item.shopify_fulfillment_status ? status(item.shopify_fulfillment_status) : "")}</small></td><td>${escapeHtml(fileCount(item))}</td><td>${escapeHtml(date(item.created_at))}</td><td>${escapeHtml(money(item.final_price || item.estimated_total_max || item.estimated_price_max || item.estimated_price))}</td><td><a class="table-link" href="${projectUrl(item.id)}">Open project</a></td></tr>`).join("")}</tbody></table></div>`;
+  }
+
+  function fileCount(item) {
+    const models = Math.max(Number(item.uploaded_file_count || 0), Array.isArray(item.model_files) ? item.model_files.filter((file) => file?.path).length : 0, item.file_path ? 1 : 0);
+    return models + (Array.isArray(item.reference_files) ? item.reference_files.length : 0);
   }
 
   function activityList(items, empty = "No administrative activity has been recorded yet.") {
@@ -73,8 +80,88 @@
   }
 
   function renderOrders(data) {
-    root.innerHTML = `${controls("Search by quote code, customer, email, or material", '<select id="status-filter" aria-label="Filter by status"><option value="all">All order statuses</option><option value="accepted">Accepted</option><option value="in_production">In production</option><option value="completed">Completed</option></select>')}<div id="operations-results"></div>`;
-    bindFilter(data.orders, (item, query, selected) => (selected === "all" || item.status === selected) && [item.quote_code, item.name, item.email, item.material].join(" ").toLowerCase().includes(query), requestRows);
+    const selectedProject = new URLSearchParams(window.location.search).get("project");
+    if (selectedProject) return renderProject(selectedProject);
+    const shopifyNotice = data.shopify?.orderAccess === "read_orders_required"
+      ? '<div class="operations-alert"><strong>Shopify order status needs read_orders.</strong><span>Draft Orders are linked, but completed order numbers, payment, and fulfillment need the Shopify app to be granted read_orders.</span></div>'
+      : data.shopify?.orderAccess === "unavailable"
+        ? '<div class="operations-alert"><strong>Shopify status is temporarily unavailable.</strong><span>Stored projects and private files remain available; live order status could not be refreshed.</span></div>'
+        : data.shopify?.configured === false
+          ? '<div class="operations-alert"><strong>Shopify reconciliation is not configured.</strong><span>Add the server-only Shopify variables to show live order numbers, payment, and fulfillment.</span></div>'
+          : "";
+    root.innerHTML = `${shopifyNotice}${controls("Search quote, Shopify order, customer, email, or project ID", '<select id="status-filter" aria-label="Filter by project status"><option value="all">All project statuses</option><option value="pending">New</option><option value="reviewed">Reviewing</option><option value="accepted">Accepted</option><option value="in_production">In production</option><option value="completed">Completed</option><option value="declined">Cancelled</option></select><select id="service-filter" aria-label="Filter by service"><option value="all">All services</option><option value="PRINT_ONLY">Print only</option><option value="DESIGN_ONLY">Design only</option><option value="DESIGN_AND_PRINT">Design and print</option></select>')}<div id="operations-results"></div>`;
+    bindFilter(data.orders, (item, query, selected) => {
+      const serviceFilter = document.querySelector("#service-filter")?.value || "all";
+      return (selected === "all" || item.status === selected)
+        && (serviceFilter === "all" || item.service_intent === serviceFilter)
+        && [item.id, item.quote_code, item.shopify_order_number, item.shopify_draft_order_name, item.name, item.email, item.material, item.status, item.service_intent, item.shopify_payment_status, item.shopify_fulfillment_status, item.shopify_draft_order_live_status].join(" ").toLowerCase().includes(query);
+    }, requestRows, null, ["#service-filter"]);
+  }
+
+  function detailRows(rows) {
+    return `<dl class="project-detail-grid">${rows.map(([term, value]) => `<div><dt>${escapeHtml(term)}</dt><dd>${escapeHtml(value == null || value === "" ? "Not recorded" : value)}</dd></div>`).join("")}</dl>`;
+  }
+
+  function additionalRows(estimate) {
+    const alreadyShown = new Set([
+      "id", "quote_code", "service_intent", "file_status", "quantity", "submitted_length", "submitted_width", "submitted_height", "dimension_unit",
+      "material", "desired_colours", "colour_count", "total_print_hours", "estimated_production_hours", "total_filament_grams", "estimated_material_grams",
+      "created_at", "updated_at", "estimated_total_max", "estimated_price_max", "final_price", "manufacturing_total", "design_fee", "assembly_fee", "shipping_amount",
+      "name", "email", "application_description", "notes", "admin_notes", "clarification_notes", "shopify_draft_order_id", "shopify_draft_order_name",
+      "shopify_order_id", "shopify_order_number", "shopify_payment_status", "shopify_fulfillment_status", "shopify_draft_order_live_status",
+      "shopify_draft_order_status", "shopify_admin_url", "shopify_order_access", "model_files", "reference_files", "file_path", "original_file_name",
+      "drive_model_files", "drive_reference_files", "drive_file_id", "drive_web_view_link"
+    ]);
+    return Object.entries(estimate)
+      .filter(([key, value]) => !alreadyShown.has(key) && value != null && value !== "" && typeof value !== "object")
+      .map(([key, value]) => [key.replaceAll("_", " "), typeof value === "boolean" ? (value ? "Yes" : "No") : value]);
+  }
+
+  function dimensions(estimate) {
+    if (![estimate.submitted_length, estimate.submitted_width, estimate.submitted_height].every((value) => Number(value) > 0)) return "Not recorded";
+    return `${estimate.submitted_length} × ${estimate.submitted_width} × ${estimate.submitted_height} ${estimate.dimension_unit || ""}`.trim();
+  }
+
+  function renderProjectFiles(project) {
+    if (!project.files.length) return '<div class="empty-state">No uploaded customer files are recorded for this project.</div>';
+    return `<div class="project-files">${project.files.map((file) => `<article><div><strong>${escapeHtml(file.name)}</strong><small>${escapeHtml(file.extension.toUpperCase() || "FILE")} · ${escapeHtml(fileSize(file.sizeBytes))} · ${escapeHtml(date(file.uploadedAt))}</small></div><div class="table-actions">${file.viewable ? `<button class="table-link project-file" type="button" data-path="${escapeHtml(file.path)}" data-download="false">View</button>` : ""}<button class="table-link project-file" type="button" data-path="${escapeHtml(file.path)}" data-download="true">Download</button></div></article>`).join("")}</div>`;
+  }
+
+  async function renderProject(estimateId) {
+    root.innerHTML = '<div class="loading-state" role="status">Loading project…</div>';
+    try {
+      const project = await api("/api/admin-projects", { action:"load", estimateId });
+      const estimate = project.estimate;
+      const orderLabel = estimate.shopify_order_number || estimate.shopify_draft_order_name || "No Shopify order";
+      const settings = Array.isArray(estimate.model_files) ? estimate.model_files.find((item) => item?.print_settings)?.print_settings : null;
+      root.innerHTML = `<a class="project-back" href="/admin/orders">← All projects</a>
+        <article class="project-detail"><header class="project-detail-header"><div><p class="eyebrow">Order / project</p><h2>${escapeHtml(orderLabel)} · ${escapeHtml(estimate.quote_code)}</h2><p>${escapeHtml(estimate.name || "Name not provided")} · ${escapeHtml(estimate.email || "Email not provided")}</p></div><div class="project-header-status">${badge(estimate.status)}<span>${escapeHtml(status(estimate.shopify_payment_status || estimate.shopify_draft_order_live_status || estimate.shopify_draft_order_status || "Not linked"))}</span>${estimate.shopify_fulfillment_status ? `<span>${escapeHtml(status(estimate.shopify_fulfillment_status))}</span>` : ""}</div></header>
+        <div class="project-actions"><a class="button button-secondary" href="${estimateUrl(estimate.quote_code)}">Open estimate review</a>${estimate.shopify_admin_url ? `<a class="button button-primary" href="${escapeHtml(estimate.shopify_admin_url)}" target="_blank" rel="noopener noreferrer">Open Shopify Order</a>` : ""}</div>
+        <section><h3>Project details</h3>${detailRows([["Project ID", estimate.id], ["Quote code", estimate.quote_code], ["Service", service(estimate.service_intent)], ["File / modification status", status(estimate.file_status)], ["Quantity", estimate.quantity], ["Dimensions", dimensions(estimate)], ["Material", estimate.material], ["Colours", estimate.desired_colours || estimate.colour_count], ["Estimated print hours", estimate.total_print_hours ?? estimate.estimated_production_hours], ["Filament weight", estimate.total_filament_grams ?? estimate.estimated_material_grams], ["Infill", settings?.infill_percent == null ? null : `${settings.infill_percent}%`], ["Wall count", settings?.wall_loops], ["Created", date(estimate.created_at)], ["Updated", date(estimate.updated_at)]])}</section>
+        <section><h3>Pricing / estimate</h3>${detailRows([["Estimated total", money(estimate.estimated_total_max ?? estimate.estimated_price_max)], ["Final price", estimate.final_price == null ? "Not set" : money(estimate.final_price)], ["Manufacturing", estimate.manufacturing_total == null ? null : money(estimate.manufacturing_total)], ["Design fee", estimate.design_fee == null ? null : money(estimate.design_fee)], ["Assembly fee", estimate.assembly_fee == null ? null : money(estimate.assembly_fee)], ["Shipping estimate", estimate.shipping_amount == null ? null : money(estimate.shipping_amount)]])}</section>
+        <section><h3>Customer information and notes</h3>${detailRows([["Customer", estimate.name], ["Email", estimate.email], ["Customer description", estimate.application_description], ["Customer notes", estimate.notes], ["Admin notes", estimate.admin_notes], ["Clarification notes", estimate.clarification_notes]])}</section>
+        <section><h3>Estimator inputs</h3>${detailRows([["Application category", estimate.application_category], ["Geometry classification", estimate.ai_geometry_classification], ["Utilization factor", estimate.geometry_utilization_factor], ["Recommended infill", estimate.recommended_infill_percent == null ? null : `${estimate.recommended_infill_percent}%`], ["Recommended walls", estimate.recommended_wall_loops], ["Recommended top / bottom layers", estimate.recommended_top_bottom_layers], ["Print profile", estimate.print_profile], ["Print-time source", estimate.print_time_source], ["Estimate method", estimate.estimation_method], ["Assembly required", estimate.assembly_required ? "Yes" : "No"], ["Manual review", estimate.requires_manual_review ? "Required" : "Not required"]])}</section>
+        <section><h3>Shopify</h3>${detailRows([["Draft Order", estimate.shopify_draft_order_name || estimate.shopify_draft_order_id], ["Order number", estimate.shopify_order_number], ["Payment", status(estimate.shopify_payment_status)], ["Fulfillment", status(estimate.shopify_fulfillment_status)], ["Draft status", status(estimate.shopify_draft_order_live_status || estimate.shopify_draft_order_status)]])}${project.shopify?.orderAccess === "read_orders_required" ? '<p class="project-limitation">Grant <code>read_orders</code> to the Shopify app to retrieve completed order numbers, payment status, and fulfillment status.</p>' : ""}</section>
+        <section><h3>Customer files</h3>${renderProjectFiles(project)}</section>
+        ${additionalRows(estimate).length ? `<details class="project-additional"><summary>Additional stored project fields</summary>${detailRows(additionalRows(estimate))}</details>` : ""}</article>`;
+      document.querySelectorAll(".project-file").forEach((button) => button.addEventListener("click", () => openProjectFile(estimate.id, button)));
+    } catch (error) {
+      root.innerHTML = `<div class="empty-state error-state"><strong>Could not load this project.</strong><p>${escapeHtml(error.message)}</p><a class="button button-secondary" href="/admin/orders">Back to projects</a></div>`;
+    }
+  }
+
+  async function openProjectFile(estimateId, button) {
+    const popup = window.open("about:blank", "_blank");
+    button.disabled = true;
+    try {
+      const payload = await api("/api/admin-projects", { action:"file", estimateId, path:button.dataset.path, download:button.dataset.download === "true" });
+      if (popup) popup.location = payload.signedUrl; else window.location.assign(payload.signedUrl);
+    } catch (error) {
+      popup?.close();
+      window.alert(error.message || "The private file could not be opened.");
+    } finally {
+      button.disabled = false;
+    }
   }
 
   function renderCustomers(data) {
@@ -96,7 +183,7 @@
     return '<div class="operations-alert"><strong>Activity logging is not active yet.</strong><span>Apply Supabase migration 016 to enable the audit trail and expanded order statuses.</span></div>';
   }
 
-  function bindFilter(items, predicate, renderer, afterRender) {
+  function bindFilter(items, predicate, renderer, afterRender, extraSelectors = []) {
     const input = document.querySelector("#operations-search");
     const select = document.querySelector("#status-filter");
     const update = () => {
@@ -108,6 +195,7 @@
     };
     input.addEventListener("input", update);
     select?.addEventListener("change", update);
+    extraSelectors.forEach((selector) => document.querySelector(selector)?.addEventListener("change", update));
     update();
   }
 

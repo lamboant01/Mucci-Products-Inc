@@ -2,6 +2,12 @@
   "functions": {
     "api/estimate-drive.js": {
       "maxDuration": 60
+    },
+    "api/admin-operations.js": {
+      "maxDuration": 60
+    },
+    "api/admin-projects.js": {
+      "maxDuration": 60
     }
   },
   "routes": [
